@@ -15,6 +15,9 @@ internal fun sandboxInfo(alias: String, id: String = SANDBOX_ID, homeReleasedAt:
         """"state":"stopped","createdAt":"2026-09-13T12:00:00Z","lastUsedAt":"2026-09-13T12:00:00Z",""" +
         """"deleteAfter":"2026-10-13T12:00:00Z"""" + (homeReleasedAt?.let { ""","homeReleasedAt":"$it"""" } ?: "") + "}"
 
+/** The answer to a lookup by alias: the sandbox filed under it, or an empty page when there is none. */
+internal fun sandboxPage(vararg sandboxes: String): String = sandboxes.joinToString(",", prefix = """{"sandboxes":[""", postfix = "]}")
+
 internal fun fileEntry(name: String, size: Long, type: String = "file"): String =
     """{"path":"/home/sandbox/$name","name":"$name","type":"$type","size":$size,""" +
         """"modifiedAt":"2026-09-13T12:00:00Z","mode":420}"""

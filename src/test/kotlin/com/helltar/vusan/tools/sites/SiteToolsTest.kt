@@ -8,6 +8,7 @@ import com.helltar.vusan.tools.sandbox.SandboxClient
 import com.helltar.vusan.tools.sandbox.SANDBOX_ID
 import com.helltar.vusan.tools.sandbox.problemDocument
 import com.helltar.vusan.tools.sandbox.sandboxInfo
+import com.helltar.vusan.tools.sandbox.sandboxPage
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
 import kotlin.test.Test
@@ -51,6 +52,12 @@ class SiteToolsTest {
 
                 path.endsWith("/site") ->
                     if (site == null) notFound() else respond(site, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+
+                path == "/v1/sandboxes" && request.method == HttpMethod.Get -> respond(
+                    sandboxPage(sandboxInfo("telegram:55", homeReleasedAt = homeReleasedAt)),
+                    HttpStatusCode.OK,
+                    headersOf(HttpHeaders.ContentType, "application/json"),
+                )
 
                 else -> respond(
                     sandboxInfo("telegram:55", homeReleasedAt = homeReleasedAt),

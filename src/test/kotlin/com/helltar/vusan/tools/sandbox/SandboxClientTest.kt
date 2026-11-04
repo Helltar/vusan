@@ -11,6 +11,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
 
@@ -130,32 +131,51 @@ class SandboxClientTest {
     }
 
     @Test
-    fun `a reset forgets the sandbox, so the next use opens the new one`() = runBlocking {
+    fun `a reset forgets the sandbox, so the next use looks it up again`() = runBlocking {
         val paths = mutableListOf<String>()
         val http = Http.createClient(MockEngine { request ->
             paths += "${request.method.value} ${request.url.encodedPath}"
             when {
                 request.method == HttpMethod.Delete -> respond("", HttpStatusCode.NoContent)
                 request.url.encodedPath.endsWith("/execs") -> json("""{"execs":[]}""")
-                else -> json(sandboxInfo("telegram:42"))
+                request.url.encodedPath == "/v1/sandboxes" -> json(sandboxPage(sandboxInfo("telegram:42")))
+                else -> error("Unexpected request ${request.method.value} ${request.url.encodedPath}")
             }
         })
         val sandbox = SandboxClient(http, "http://sandbox", "test-token").sandboxOf("telegram:42")
 
         sandbox.listCommands()
-        sandbox.reset()
+        assertTrue(sandbox.reset())
         sandbox.listCommands()
 
         assertEquals(
             listOf(
-                "POST /v1/sandboxes",
+                "GET /v1/sandboxes",
                 "GET /v1/sandboxes/$SANDBOX_ID/execs",
                 "DELETE /v1/sandboxes/$SANDBOX_ID",
-                "POST /v1/sandboxes",
+                "GET /v1/sandboxes",
                 "GET /v1/sandboxes/$SANDBOX_ID/execs",
             ),
             paths,
         )
+    }
+
+    // a question about a sandbox is answered by looking it up, so asking never creates one
+    @Test
+    fun `a read for someone who never used the sandbox makes none`() = runBlocking {
+        val requests = mutableListOf<String>()
+        val http = Http.createClient(MockEngine { request ->
+            requests += "${request.method.value} ${request.url.encodedPath}?${request.url.encodedQuery}"
+            if (request.method == HttpMethod.Get && request.url.encodedPath == "/v1/sandboxes") json(sandboxPage()) else error("Unexpected request")
+        })
+        val sandbox = SandboxClient(http, "http://sandbox", "test-token").sandboxOf("telegram:42")
+
+        assertTrue(sandbox.listCommands().isEmpty())
+        assertNull(sandbox.publishedSite())
+        assertFalse(sandbox.unpublishSite())
+        assertFalse(sandbox.reset())
+
+        assertTrue(requests.all { it.startsWith("GET /v1/sandboxes?alias=telegram") }, requests.toString())
     }
 
     @Test

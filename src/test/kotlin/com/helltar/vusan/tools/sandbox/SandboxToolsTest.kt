@@ -95,6 +95,11 @@ class SandboxToolsTest {
                     json(sandboxInfo("telegram:55"))
                 }
 
+                path == "/v1/sandboxes" -> {
+                    assertEquals("telegram:55", request.url.parameters["alias"])
+                    json(sandboxPage(sandboxInfo("telegram:55")))
+                }
+
                 path == "/v1/sandboxes/$SANDBOX_ID" && request.method == HttpMethod.Delete -> {
                     resets++
                     respond("", HttpStatusCode.NoContent)
@@ -400,6 +405,7 @@ class SandboxToolsTest {
         )
         val result = tools(attached = listOf(attached)).resetSandbox()
         assertEquals(1, resets)
+        assertEquals(0, creations, "a reset made a sandbox in order to delete it")
         assertTrue(writes.isEmpty())
         assertContains(result, "empty again")
     }

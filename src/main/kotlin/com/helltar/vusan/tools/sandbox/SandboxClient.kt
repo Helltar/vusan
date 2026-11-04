@@ -66,8 +66,11 @@ class SandboxClient(
         suspend fun cancelCommand(jobId: String): CommandResult =
             call { sandbox().exec(jobId).cancel() }.result(output = "", nextOffset = 0, hasMore = false)
 
-        suspend fun listCommands(): List<CommandResult> =
-            call { sandbox().execs() }.map { it.result(output = "", nextOffset = 0, hasMore = false) }
+        suspend fun listCommands(): List<CommandResult> {
+            val sandbox = existing() ?: return emptyList()
+
+            return call { sandbox.execs() }.map { it.result(output = "", nextOffset = 0, hasMore = false) }
+        }
 
         suspend fun writeFile(path: String, bytes: ByteArray) {
             require(bytes.size <= SANDBOX_FILE_LIMIT) { "File exceeds the 50 MB transfer limit" }
@@ -115,10 +118,13 @@ class SandboxClient(
             call { sandbox().files.delete(path, recursive = true) }
         }
 
-        /** Deletes the sandbox with its home; the next use creates an empty one. */
-        suspend fun reset() {
-            call { sandbox().delete() }
+        /** Deletes the sandbox with its home; the next use creates an empty one, and false says there was none. */
+        suspend fun reset(): Boolean {
+            val sandbox = existing() ?: return false
+            call { sandbox.delete() }
             opened = null
+
+            return true
         }
 
         /**
@@ -128,15 +134,18 @@ class SandboxClient(
         suspend fun publishSite(path: String): PublishedSite = call { sandbox().publish(path) }.published()
 
         /** Whether retention took the home this person's site was built from since it was last used. */
-        suspend fun homeReleased(): Boolean = call { sandbox().get() }.homeReleasedAt != null
+        suspend fun homeReleased(): Boolean = existing()?.let { sandbox -> call { sandbox.get() }.homeReleasedAt != null } ?: false
 
         /** What is published for this person, or null. */
-        suspend fun publishedSite(): PublishedSite? = call { sandbox().siteOrNull() }?.published()
+        suspend fun publishedSite(): PublishedSite? = existing()?.let { sandbox -> call { sandbox.siteOrNull() } }?.published()
 
         /** Takes the site down; false when there was none. The sandbox keeps its files. */
-        suspend fun unpublishSite(): Boolean = call { sandbox().unpublish() }
+        suspend fun unpublishSite(): Boolean = existing()?.let { sandbox -> call { sandbox.unpublish() } } ?: false
 
         private suspend fun sandbox(): Sandbox = opened ?: call { regolith.getOrCreate(person) }.also { opened = it }
+
+        // a read that finds nothing must not make a sandbox for someone who never used one
+        private suspend fun existing(): Sandbox? = opened ?: call { regolith.byAlias(person) }?.also { opened = it }
 
         /**
          * Reads output from [offset] until the command ends, this call's budget runs out or the output limit
