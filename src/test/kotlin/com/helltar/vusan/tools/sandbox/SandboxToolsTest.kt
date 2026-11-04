@@ -206,11 +206,20 @@ class SandboxToolsTest {
     }
 
     @Test
-    fun `an interrupted command names why the sandbox stopped`() = runBlocking {
-        val result = tools(info = execInfo(outcome = """{"type":"interrupted","reason":"server_restarted"}"""))
+    fun `an interrupted command says why the sandbox stopped, in words the model can act on`() = runBlocking {
+        val restarted = tools(info = execInfo(outcome = """{"type":"interrupted","reason":"server_restarted"}"""))
             .runCommand("make")
-        assertContains(result, "server_restarted")
-        assertContains(result, "files were kept")
+        assertContains(restarted, "The sandbox host restarted.")
+        assertContains(restarted, "Files were kept")
+
+        val killed = tools(info = execInfo(outcome = """{"type":"interrupted","reason":"container_exited"}"""))
+            .runCommand("pkill sleep")
+        assertContains(killed, "never by name")
+
+        // a reason a newer server added reaches the model as the server wrote it
+        val unknown = tools(info = execInfo(outcome = """{"type":"interrupted","reason":"moved_hosts"}"""))
+            .runCommand("make")
+        assertContains(unknown, "`moved_hosts`")
     }
 
     @Test

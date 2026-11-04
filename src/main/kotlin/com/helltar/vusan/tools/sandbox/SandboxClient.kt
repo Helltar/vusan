@@ -212,6 +212,27 @@ private fun RegolithException.explain(): String = when (code) {
 private fun RegolithException.retryHint(): String =
     retryAfter?.let { "in about ${it.inWholeSeconds.coerceAtLeast(1)} seconds" } ?: "shortly"
 
+/**
+ * Why a session ended, as one sentence the model can act on. The protocol names every reason a server sends,
+ * and a newer server may send one this build does not know, which is passed on as the server wrote it.
+ */
+private fun sessionEnd(reason: String): String = when (reason) {
+    Reasons.IDLE -> "It stopped after sitting idle, which is normal; the next command starts it again."
+    Reasons.STOPPED -> "It was stopped on purpose, through the API."
+    Reasons.SESSION_EXPIRED -> "It ran as long as a session may; the next command starts a new one."
+    Reasons.CAPACITY -> "It was stopped while idle to make room for another sandbox."
+    Reasons.CPU_LIMIT ->
+        "Processes left running in the background burned too much CPU while no command ran; do not leave busy processes behind."
+    Reasons.CONTAINER_EXITED ->
+        "A command killed the sandbox's own keep-alive process (`pkill sleep`, `kill -9 -1`); stop processes by their PID or by what you started, never by name."
+    Reasons.UNRESPONSIVE ->
+        "Processes left in the background filled the process limit, so nothing more could start; wait for background jobs instead of leaving them running."
+    Reasons.POLICY_FAILED -> "Its network rules were lost and had to be put back."
+    Reasons.SANDBOX_DELETED -> "The sandbox was reset."
+    Reasons.SERVER_RESTARTED -> "The sandbox host restarted."
+    else -> "The sandbox host gave the reason `$reason`."
+}
+
 private fun RegolithSite.published(): PublishedSite = PublishedSite(url, files, bytes, publishedAt, until, hasIndex)
 
 private fun ExecInfo.result(read: OutputSoFar): CommandResult =
@@ -235,7 +256,7 @@ private fun ExecInfo.result(output: String, nextOffset: Long, hasMore: Boolean, 
             Reasons.PIDS_LIMITED -> CommandLimit.TOO_MANY_PROCESSES
             else -> null
         },
-        reason = reason.takeIf { status == CommandStatus.INTERRUPTED },
+        interruption = reason?.takeIf { status == CommandStatus.INTERRUPTED }?.let(::sessionEnd),
     )
 }
 

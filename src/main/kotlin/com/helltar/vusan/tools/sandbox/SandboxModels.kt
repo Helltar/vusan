@@ -23,9 +23,10 @@ data class CommandResult(
     val elapsedMs: Long = 0,
     val limit: CommandLimit? = null,
     /**
-     * Why a session ended under the command, as the server named it; only for [CommandStatus.INTERRUPTED].
+     * Why the session ended under the command, in words the model can act on; only for
+     * [CommandStatus.INTERRUPTED].
      */
-    val reason: String? = null,
+    val interruption: String? = null,
 )
 
 /**

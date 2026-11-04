@@ -23,7 +23,8 @@ history still uses `(userId, chatId)`; only the files and the commands running i
   server refuses to exceed before sending any of it. Refusals carry the server's error `code`, which decides
   what the model is told — capacity reads as "try again" with the wait the server asked for, an unavailable
   server as its own reason plus that wait, everything else as the server's own sentence; no answer at all reads
-  as temporarily unavailable.
+  as temporarily unavailable. Why a session ended under a command, or ended last, is turned into a sentence here as
+  well, from the reasons the protocol names.
 - **`SandboxTools`** — the model-facing surface: run a command and read its output, cancel it, write, read and edit
   a file, reset the sandbox, send files out. It copies each of
   the turn's files into a directory of the turn's own before the first command that might want them, and renders a

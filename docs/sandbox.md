@@ -90,6 +90,9 @@ Every command is a fresh shell starting at the home.
 - **Canceling** — stops that command and every process it started, background servers included.
 - **History outlives the chat** — recent commands can be listed even after `/clear`.
 - **A killed command says why** — `out of memory`, or the process limit, instead of a bare exit code.
+  A command the session ended under says why it ended, and what to do differently when the cause was
+  a command's own — a `pkill` that took the session down, background jobs left to fill the process
+  limit.
 
 ## Sending results
 
