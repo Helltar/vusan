@@ -16,7 +16,7 @@ enum class ToolGroup(val summary: String) {
     YOUTUBE("find a video by name or link, send the video or its audio track, or answer from its subtitles"),
     SCHEDULED_TASKS("run something later, once or on a repeating schedule, and list, pause, edit or cancel what is scheduled"),
     SANDBOX_MANAGEMENT("save the sandbox as a snapshot to go back to, restore or delete one, see how long its files are kept, or restart it"),
-    WEB_PUBLISHING("put a page, game or small app built in the sandbox on the internet at its own address"),
+    WEB_PUBLISHING("put a page, game or small app built in the sandbox on the internet at its own address, and keep it online longer"),
     POLLS("create a poll or a quiz in the chat and follow who answered what"),
     GIFS("find and send a ready-made GIF and, where the deployment has them, a meme picture or a short clip"),
     TELEGRAM_CHANNELS("recap a public channel by day or week, search its posts, and read the pictures in them"),

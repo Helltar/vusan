@@ -22,6 +22,7 @@ import io.reified.regolith.sdk.RegolithException
 import io.reified.regolith.sdk.Sandbox
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 
 internal const val SANDBOX_FILE_LIMIT = 50 * 1024 * 1024
 
@@ -198,6 +199,22 @@ class SandboxClient(
 
         /** What is published for this person, or null. */
         suspend fun publishedSite(): PublishedSite? = existing()?.let { sandbox -> call { sandbox.siteOrNull() } }?.published()
+
+        /**
+         * Moves the site's term to [until], earlier or later; null when nothing is published. A term past what
+         * the server allows is refused in its own words.
+         */
+        suspend fun setSiteUntil(until: Instant): PublishedSite? {
+            val sandbox = existing() ?: return null
+
+            return call {
+                try {
+                    sandbox.setSiteTerm(until)
+                } catch (e: RegolithException) {
+                    if (e.code == ErrorCodes.NOT_FOUND) null else throw e
+                }
+            }?.published()
+        }
 
         /** Takes the site down; false when there was none. The sandbox keeps its files. */
         suspend fun unpublishSite(): Boolean = existing()?.let { sandbox -> call { sandbox.unpublish() } } ?: false

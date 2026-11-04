@@ -21,7 +21,10 @@ server and described in [Regolith's documentation](https://github.com/reified-io
 - **`publishSite`** — publishes one directory of the sandbox. `index.html` must sit at its top, since
   that is the page the link opens, and the tool warns when it is missing. Everything is static — HTML,
   CSS, JavaScript, WebAssembly, images, audio, fonts — with no server, database or build step behind it.
-- **`siteStatus`** — what is online: the address, how much it holds, when it was last published.
+- **`siteStatus`** — what is online: the address, how much it holds, when it was last published and
+  until when it stays up.
+- **`setSiteOnlineUntil`** — moves the last day the site stays online, later or earlier. Publishing
+  again also extends a site, but this still works once the sandbox files behind it are gone.
 - **`unpublishSite`** — takes the site down. The sandbox files are untouched, so it can be published
   again later, at a new address.
 
@@ -32,8 +35,8 @@ server and described in [Regolith's documentation](https://github.com/reified-io
 - **One site per person** — publishing replaces everything that was there, so the directory must hold
   every file the page needs. Several projects can live in it as folders, reachable at `/name/`.
 - **Its own term** — a site is never served out of a live sandbox, which is reclaimed when it goes
-  idle. The server sets how long a site stays up, states it in every publish answer and takes the site
-  down after.
+  idle. The server gives a site its default term, states it in every publish answer and takes the site
+  down after; `setSiteOnlineUntil` moves it as far ahead as the server allows.
 - **The sandbox's retention** — takes only the sandbox files. The site stays at its address, and the
   agent is told its source is gone before it tries to change it.
 - **Reset** — `resetSandbox` ends the site at once, and its address is never served again.

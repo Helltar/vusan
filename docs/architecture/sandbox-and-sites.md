@@ -51,8 +51,8 @@ See [the sandbox guide](../sandbox.md) for behavior, setup and limits.
 
 A person's site is published by the same Regolith server that holds their sandbox — this repository holds no site host.
 [`tools/sites/SiteTools.kt`](../../src/main/kotlin/com/helltar/vusan/tools/sites/SiteTools.kt) is the whole of it: `publishSite`
-sends one directory's path, the server snapshots it out of the sandbox and answers with the address, and `siteStatus` and
-`unpublishSite` read and remove it.
+sends one directory's path, the server snapshots it out of the sandbox and answers with the address, `siteStatus` and
+`unpublishSite` read and remove it, and `setSiteOnlineUntil` moves its term to the end of a day the person names.
 
 - **One site per person**, because a site belongs to the sandbox it was published from, and that sandbox is the
   person's in every chat.

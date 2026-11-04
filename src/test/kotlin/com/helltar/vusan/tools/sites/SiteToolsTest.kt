@@ -17,6 +17,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 private const val PUBLISHED =
     """{"url":"https://k7m2q9xwtp.example.test","release":"0f1e2d3c4b5a69788796a5b4c3d2e1f0","files":3,"bytes":2048,"publishedAt":"2026-09-13T12:00:00Z","until":"2026-10-13T12:00:00Z","hasIndex":true}"""
@@ -28,11 +30,14 @@ class SiteToolsTest {
     private val context = requestContext(chatId = 55L, userId = 55L)
     private val requests = mutableListOf<String>()
     private var publishedPath: String? = null
+    private var sentUntil: String? = null
 
     private fun tools(
         site: String? = PUBLISHED,
         publish: Pair<HttpStatusCode, String> = HttpStatusCode.OK to PUBLISHED,
         homeReleasedAt: String? = null,
+        // the server's refusal of a term, such as one too far ahead
+        termRefusal: String? = null,
     ): SiteTools {
         val engine = MockEngine { request ->
             val path = request.url.encodedPath
@@ -49,6 +54,13 @@ class SiteToolsTest {
 
                 path.endsWith("/site") && request.method == HttpMethod.Delete ->
                     if (site == null) notFound() else respond("", HttpStatusCode.NoContent)
+
+                path.endsWith("/site") && request.method == HttpMethod.Patch -> {
+                    val until = Regex(""""until":"([^"]*)"""").find(request.body.toByteArray().decodeToString())?.groupValues?.get(1)
+                    sentUntil = until
+                    if (termRefusal != null) return@MockEngine respond(termRefusal, HttpStatusCode.BadRequest, headersOf(HttpHeaders.ContentType, "application/problem+json"))
+                    if (site == null) notFound() else respond(site.replace("2026-10-13T12:00:00Z", until.orEmpty()), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
 
                 path.endsWith("/site") ->
                     if (site == null) notFound() else respond(site, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
@@ -118,7 +130,38 @@ class SiteToolsTest {
     // retention may take a site's home and leave the site up; editing it then starts over
     @Test
     fun `status says when the files a site was built from are gone`() = runBlocking {
-        assertContains(tools(homeReleasedAt = "2026-09-20T12:00:00Z").siteStatus(), "build it again first")
+        val status = tools(homeReleasedAt = "2026-09-20T12:00:00Z").siteStatus()
+        assertContains(status, "build it again first")
+        // the date can still move, and that alone keeps such a site up
+        assertContains(status, "`setSiteOnlineUntil`")
+    }
+
+    // a person names a day, and every answer shows a day, so the site stays up through all of it
+    @Test
+    fun `a site is kept online through the whole day named`() = runBlocking {
+        val day = LocalDate.now(ZoneOffset.UTC).plusDays(60)
+        val result = tools().setSiteOnlineUntil(" $day ")
+
+        assertEquals("${day}T23:59:59Z", sentUntil)
+        assertContains(result, "now stays online until $day")
+    }
+
+    @Test
+    fun `a past day, a day in another shape or no site at all is answered without moving anything`() = runBlocking {
+        assertContains(toolFailure { tools().setSiteOnlineUntil("2020-01-01") }, "`unpublishSite`")
+        assertContains(toolFailure { tools().setSiteOnlineUntil("31.12.2026") }, "`YYYY-MM-DD`")
+        assertTrue(requests.none { it.startsWith("PATCH") })
+
+        val tomorrow = LocalDate.now(ZoneOffset.UTC).plusDays(1).toString()
+        assertContains(tools(site = null).setSiteOnlineUntil(tomorrow), "Nothing is published")
+    }
+
+    @Test
+    fun `a date past what the server allows is refused in its own words`() = runBlocking {
+        val refusal = problemDocument("invalid_request", 400, "Invalid request", "A site's term reaches at most 365 days from now")
+        val far = LocalDate.now(ZoneOffset.UTC).plusYears(5).toString()
+
+        assertContains(toolFailure { tools(termRefusal = refusal).setSiteOnlineUntil(far) }, "at most 365 days")
     }
 
     @Test

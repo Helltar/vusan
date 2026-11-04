@@ -8,6 +8,8 @@ import com.helltar.vusan.tools.suspendToolGuard
 import com.helltar.vusan.tools.sandbox.PublishedSite
 import com.helltar.vusan.tools.sandbox.SandboxClient
 import com.helltar.vusan.tools.sandbox.sandboxPath
+import java.time.LocalDate
+import java.time.ZoneOffset
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -43,10 +45,26 @@ class SiteTools(
             if (sandbox.homeReleased()) {
                 append(
                     "\nThe sandbox files it was built from were deleted after the sandbox went unused; " +
-                        "the site itself is unchanged. To change it, build it again first.",
+                        "the site itself is unchanged. To change it, build it again first; `setSiteOnlineUntil` still moves its date.",
                 )
             }
         }
+    }
+
+    @Tool(SiteToolDescriptions.SET_SITE_UNTIL)
+    suspend fun setSiteOnlineUntil(
+        @Arg(SiteToolDescriptions.UNTIL_DATE)
+        date: String,
+    ): String = suspendToolGuard {
+        val day = runCatching { LocalDate.parse(date.trim()) }.getOrNull()
+        requireNotNull(day) { "Give the date as `YYYY-MM-DD`, for example `2026-12-31`" }
+        require(!day.isBefore(LocalDate.now(ZoneOffset.UTC))) {
+            "$day has passed; to take the site down now, use `unpublishSite`"
+        }
+        // the site stays up through the whole day the person named, which is the date every answer shows
+        val site = sandbox.setSiteUntil(Instant.parse("${day}T23:59:59Z"))
+            ?: return@suspendToolGuard "Nothing is published, so there is no site to keep online."
+        "The site at ${site.url} now stays online until ${site.until.asDate()}; after that it is gone, and the next publish gets a new address."
     }
 
     @Tool(SiteToolDescriptions.UNPUBLISH_SITE)

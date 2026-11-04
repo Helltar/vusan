@@ -13,7 +13,8 @@ internal object SiteToolDescriptions {
                 "The page has its own web address, so `localStorage` works and saved progress survives. " +
                 "Everything in the directory becomes readable by anyone with the link, so say so before publishing anything personal. " +
                 "What is published is a snapshot taken now, so changing the files in the sandbox changes nothing until you publish again; a visitor's browser may hold older files for a minute. " +
-                "The site stays online until the date the answer states, and every publish states it anew; after that date it is gone, and the next publish gets a new address."
+                "The site stays online until the date the answer states, and every publish states it anew; after that date it is gone, and the next publish gets a new address. " +
+                "`setSiteOnlineUntil` moves that date."
 
     const val DIRECTORY =
         "Path of the directory to publish, such as `site` or `project/dist`."
@@ -21,6 +22,15 @@ internal object SiteToolDescriptions {
     const val SITE_STATUS =
         "Reports whether this person currently has a site published: its address, how much it holds, when it was last published and until when it stays online. " +
                 "Use it before answering questions about what is online rather than assuming the last publish is still what is there."
+
+    const val SET_SITE_UNTIL =
+        "Changes the date this person's site stays online until: later to keep it up longer, or earlier to have it taken down on that day. " +
+                "Use it when the user asks to keep their site up for longer or to take it down on a given day. " +
+                "Publishing again also extends a site, but only this works once the sandbox files it was built from are gone. " +
+                "The server allows dates only so far ahead and says so when one is too far."
+
+    const val UNTIL_DATE =
+        "The last day the site stays online, as `YYYY-MM-DD` in UTC."
 
     const val UNPUBLISH_SITE =
         "Takes this person's site off the internet, address and all. " +
