@@ -50,6 +50,7 @@ import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
 import com.helltar.vusan.tools.ToolCatalogFactory
 import com.helltar.vusan.tools.imagegen.SelfImage
 import com.helltar.vusan.tools.imagegen.resolveSelfImage
+import com.helltar.vusan.tools.sandbox.SandboxServer
 import com.helltar.vusan.tools.vision.ImageVisionClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.ktor.client.*
@@ -302,7 +303,8 @@ suspend fun main() = coroutineScope {
 
         logStartup(
             config, llm, fallback, vision, ambient?.botNames, toolCatalogFactory.availableToolNames, imagePlan,
-            selfImage, groupLogOn = groupLog != null, contextWindowTokens = contextWindowTokens,
+            selfImage, toolCatalogFactory.sandboxServer(), groupLogOn = groupLog != null,
+            contextWindowTokens = contextWindowTokens,
         )
 
         val botJob = botRunner.start(this)
@@ -360,6 +362,8 @@ private fun logStartup(
     imagePlan: String?,
     // the self-image source, resolved only where something uses it
     selfImage: SelfImage?,
+    // what the Regolith server said it runs, or null when none is configured or it did not answer
+    sandboxServer: SandboxServer?,
     groupLogOn: Boolean,
     contextWindowTokens: Long,
 ) {
@@ -469,7 +473,24 @@ private fun logStartup(
         }
     }
 
-    log.info { config.regolithUrl?.let { "Sandbox: url=[$it]" } ?: "Sandbox: off (REGOLITH_URL not set)" }
+    when {
+        config.regolithUrl == null -> log.info { "Sandbox: off (REGOLITH_URL not set)" }
+
+        sandboxServer == null ->
+            log.warn { "Sandbox: url=[${config.regolithUrl}] — the Regolith server did not answer; the shell tools fail until it does" }
+
+        // the sdk decodes by its own protocol, so a server speaking another one fails mid-turn instead
+        !sandboxServer.compatible ->
+            log.warn {
+                "Sandbox: url=[${config.regolithUrl}] server=[${sandboxServer.version}] — it speaks protocol " +
+                        "${sandboxServer.protocol}, this build reads ${sandboxServer.expectedProtocol}; see docs/sandbox.md for the release to run"
+            }
+
+        else -> log.info {
+            "Sandbox: url=[${config.regolithUrl}] server=[${sandboxServer.version}] publishing=[${if (sandboxServer.publishing) "on" else "off"}]"
+        }
+    }
+
     log.info { if (groupLogOn) "Group log: on retentionDays=[${config.groupLog.retentionDays}]" else "Group log: off (GROUP_LOG_ENABLED=false)" }
 
     log.info {

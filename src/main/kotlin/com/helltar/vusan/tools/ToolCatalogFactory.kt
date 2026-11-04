@@ -51,6 +51,7 @@ import com.helltar.vusan.tools.quiz.QuizTools
 import com.helltar.vusan.tools.reaction.ReactionTools
 import com.helltar.vusan.tools.sandbox.SandboxClient
 import com.helltar.vusan.tools.sandbox.SandboxManagementTools
+import com.helltar.vusan.tools.sandbox.SandboxServer
 import com.helltar.vusan.tools.sandbox.SandboxTools
 import com.helltar.vusan.tools.searxng.SearxngClient
 import com.helltar.vusan.tools.searxng.SearxngTools
@@ -213,6 +214,9 @@ class ToolCatalogFactory(
                     config.openAiStt?.let { stt -> whisper?.let { WhisperVideoAudioTranscriber(it, stt) } },
             )
         }
+
+    /** What the Regolith server runs, for the startup summary; null when none is configured or it did not answer. */
+    suspend fun sandboxServer(): SandboxServer? = sandboxClient?.serverOrNull()
 
     /**
      * A tool that makes something is registered whatever the chat accepts: with `send` it is a producer

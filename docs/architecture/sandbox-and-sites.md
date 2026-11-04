@@ -17,7 +17,8 @@ history still uses `(userId, chatId)`; only the files and the commands running i
 - **`SandboxClient`** — `sandboxOf` gives a turn one handle for the person's sandbox, which asks the server for
   it on first use, created if it has none; the sandbox and site tools of that turn share it, so a reset by one is
   seen by the other. A call that only asks — the command list, the status, the site, a reset or a restart — looks
-  the sandbox up by alias instead, so asking never creates one. A command is an exec: it is started, then its output is read from a byte offset until the
+  the sandbox up by alias instead, so asking never creates one. At startup `serverOrNull` reads what the server
+  runs, for the summary line, and its protocol against the SDK's. A command is an exec: it is started, then its output is read from a byte offset until the
   command ends, a page comes back empty or the call's ten seconds are up — each page carrying the exec as it
   stands, so no second request asks for its status — and the model continues from `nextOffset`. A file is read within the call's remaining transfer budget, which the
   server refuses to exceed before sending any of it. Refusals carry the server's error `code`, which decides

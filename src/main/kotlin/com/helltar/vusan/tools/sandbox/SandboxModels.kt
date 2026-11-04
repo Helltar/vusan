@@ -69,6 +69,17 @@ data class SandboxStatus(
     val maxSnapshots: Int?,
 )
 
+/** What the Regolith server says it runs, for the startup summary. */
+data class SandboxServer(
+    val version: String,
+    val protocol: Int,
+    // the protocol this build's SDK reads; another one may fail to decode
+    val expectedProtocol: Int,
+    val publishing: Boolean,
+) {
+    val compatible: Boolean get() = protocol == expectedProtocol
+}
+
 // other tools take a sandbox file as `sandbox:<path>`, and the model may write it so here too, where every
 // path already is one.
 internal fun String.sandboxPath(): String = removePrefix(SANDBOX_REFERENCE_PREFIX)

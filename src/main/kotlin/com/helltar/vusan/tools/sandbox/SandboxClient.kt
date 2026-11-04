@@ -10,6 +10,7 @@ import io.reified.regolith.protocol.ExecInfo
 import io.reified.regolith.protocol.ExecRequest
 import io.reified.regolith.protocol.ExecStatus
 import io.reified.regolith.protocol.OutcomeType
+import io.reified.regolith.protocol.PROTOCOL_VERSION
 import io.reified.regolith.protocol.PublishedSite as RegolithSite
 import io.reified.regolith.protocol.Reasons
 import io.reified.regolith.protocol.SandboxState
@@ -20,6 +21,7 @@ import io.reified.regolith.sdk.RegolithClient
 import io.reified.regolith.sdk.RegolithConnectionException
 import io.reified.regolith.sdk.RegolithException
 import io.reified.regolith.sdk.Sandbox
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -50,6 +52,17 @@ class SandboxClient(
      * share it, so a site is published from the sandbox the commands ran in.
      */
     fun sandboxOf(person: String): PersonSandbox = PersonSandbox(person)
+
+    /**
+     * What the server runs, for the startup summary; null when it does not answer in time. The SDK keeps the
+     * answer, so the first command's timeout ceiling needs no request of its own.
+     */
+    suspend fun serverOrNull(): SandboxServer? =
+        withTimeoutOrNull(STARTUP_WAIT) {
+            runCatching { regolith.info() }
+                .onFailure { it.rethrowIfCancellation() }
+                .getOrNull()
+        }?.let { SandboxServer(it.version, it.protocol, PROTOCOL_VERSION, it.publishing) }
 
     /** One person's sandbox, for as long as the work that asked for it lasts. */
     inner class PersonSandbox internal constructor(private val person: String) : ShelfSandbox {
@@ -265,6 +278,9 @@ class SandboxClient(
         const val OUTPUT_CHARS = 16 * 1024
         const val FIRST_WAIT_SECONDS = 10
         const val UNAVAILABLE = "The sandbox is temporarily unavailable. Tell the user; do not retry immediately."
+
+        // startup reports the server rather than waiting on it: an unreachable one is a warning, not a stop
+        val STARTUP_WAIT = 10.seconds
     }
 }
 

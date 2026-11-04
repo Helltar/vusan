@@ -19,7 +19,9 @@ Installing it, making its token and checking the host are in
 
 The server has to run **Regolith 0.8.1** or a later 0.8 release: the bot talks to it through
 Regolith's own client, which reads that release's protocol and does not understand another minor
-version, and a 0.8.0 server drops the notes snapshots are taken with.
+version, and a 0.8.0 server drops the notes snapshots are taken with. At startup the bot asks the
+server what it runs and logs it beside the URL; a server that does not answer, or speaks another
+protocol, is a warning in that line rather than a stop.
 
 The bot assumes only two things about the **sandbox image**: there is no `sudo`, and nothing in
 particular is installed. The model checks what a task needs and reports a missing system package

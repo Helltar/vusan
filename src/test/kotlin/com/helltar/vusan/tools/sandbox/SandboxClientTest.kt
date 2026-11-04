@@ -11,6 +11,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
@@ -210,6 +211,19 @@ class SandboxClientTest {
         assertFalse(requests.any { it.endsWith("/restore") }, "an unknown id reached a request path")
         assertEquals(SNAPSHOT, sandbox.restoreSnapshot(SNAPSHOT)?.id)
         assertTrue("POST /v1/sandboxes/$SANDBOX_ID/snapshots/$SNAPSHOT/restore" in requests)
+    }
+
+    @Test
+    fun `the server is reported with its protocol, and one that does not answer stops nothing`() = runBlocking {
+        fun client(engine: MockEngine) = SandboxClient(Http.createClient(engine), "http://sandbox", "test-token")
+
+        val current = assertNotNull(client(MockEngine { json(serverInfo()) }).serverOrNull())
+        assertEquals("0.8.1", current.version)
+        assertTrue(current.compatible)
+        assertTrue(current.publishing)
+
+        assertFalse(assertNotNull(client(MockEngine { json(serverInfo(protocol = 99)) }).serverOrNull()).compatible)
+        assertNull(client(MockEngine { throw ConnectException("refused") }).serverOrNull())
     }
 
     @Test
