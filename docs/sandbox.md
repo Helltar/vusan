@@ -17,7 +17,7 @@ commands the model wrote and holds the Docker socket to do it — though it also
 Installing it, making its token and checking the host are in
 [Regolith's documentation](https://github.com/reified-io/regolith).
 
-The server has to run **Regolith 0.7**: the bot talks to it through Regolith's own client, which reads
+The server has to run **Regolith 0.8**: the bot talks to it through Regolith's own client, which reads
 that release's protocol and does not understand another minor version.
 
 The bot assumes only two things about the **sandbox image**: there is no `sudo`, and nothing in
