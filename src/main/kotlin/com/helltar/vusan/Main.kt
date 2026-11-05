@@ -414,7 +414,7 @@ private fun logStartup(
     log.info {
         config.image?.let { image ->
             "Images: provider=[${image.name}]" + imagePlan?.let { " plan=[$it]" }.orEmpty() +
-                    " model=[${image.model}] quality=[${image.quality}]"
+                    " model=[${image.model}] quality=[${image.quality}] gifs=[${if (image.drawsGifs) "on" else "off"}]"
         } ?: "Images: off (IMAGE_PROVIDER not set)"
     }
 

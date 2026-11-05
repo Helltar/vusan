@@ -441,6 +441,9 @@ class ImageGenToolsTest {
 
             return byteArrayOf(4, 2, 0)
         }
+
+        override suspend fun animate(prompt: String, images: List<SourceImage>, animation: ImageAnimation): ByteArray =
+            error("unused")
     }
 
     private fun recordingTools(

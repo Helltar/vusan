@@ -30,6 +30,12 @@ private const val MODERATION = "low"
 // sends png.
 private const val OUTPUT_FORMAT = "jpeg"
 private const val OUTPUT_COMPRESSION = 95
+private const val GIF_FORMAT = "gif"
+
+// a gif's frames are drawn as one sheet within the still picture's pixel budget, so an explicit frame size
+// fails for most frame counts (9 frames at 1024x1024 asks for a 3072x3072 sheet); `auto` fits the sheet,
+// at 512x512 frames as measured.
+private const val GIF_SIZE = "auto"
 private val errorJson = Json { ignoreUnknownKeys = true }
 
 /**
@@ -94,7 +100,7 @@ class OpenAiImageClient(
         val response =
             imageRequest {
                 when (auth) {
-                    is ImageAuth.ApiKey -> editViaPlatform(prompt, images, framing.toSize(model))
+                    is ImageAuth.ApiKey -> editViaPlatform(prompt, images, framing.toSize(model), stillOutput())
                     is ImageAuth.Codex -> editViaCodex(prompt, images)
                 }
             }
@@ -102,7 +108,48 @@ class OpenAiImageClient(
         return response.firstImageBytes()
     }
 
-    private suspend fun editViaPlatform(prompt: String, images: List<SourceImage>, size: String): OpenAiImageResponse =
+    // the gif route is the platform's: the codex backend answers "GIF output is not enabled for this request"
+    override suspend fun animate(prompt: String, images: List<SourceImage>, animation: ImageAnimation): ByteArray {
+        require(prompt.isNotBlank()) { "Prompt must not be blank" }
+        require(images.none { it.bytes.isEmpty() }) { "Image bytes must not be empty" }
+        check(auth is ImageAuth.ApiKey) { "GIFs are drawn on the platform route only" }
+
+        val output = gifOutput(animation)
+
+        val response: OpenAiImageResponse =
+            imageRequest {
+                if (images.isNotEmpty())
+                    editViaPlatform(prompt, images, GIF_SIZE, output)
+                else
+                    http.post("$PLATFORM_BASE_URL/generations") {
+                        authorize()
+                        contentType(ContentType.Application.Json)
+                        imageTimeout()
+
+                        setBody(
+                            OpenAiImageRequest(
+                                model = model,
+                                prompt = prompt,
+                                size = GIF_SIZE,
+                                quality = quality,
+                                moderation = MODERATION,
+                                outputFormat = GIF_FORMAT,
+                                frameCount = animation.frames,
+                                frameDurationMs = animation.frameDurationMs,
+                            ),
+                        )
+                    }.body()
+            }
+
+        return response.firstImageBytes()
+    }
+
+    private suspend fun editViaPlatform(
+        prompt: String,
+        images: List<SourceImage>,
+        size: String,
+        output: List<Pair<String, String>>,
+    ): OpenAiImageResponse =
         http.submitFormWithBinaryData(
             url = "$PLATFORM_BASE_URL/edits",
             formData = formData {
@@ -111,8 +158,7 @@ class OpenAiImageClient(
                 append("size", size)
                 append("quality", quality)
                 append("moderation", MODERATION)
-                append("output_format", OUTPUT_FORMAT)
-                append("output_compression", OUTPUT_COMPRESSION.toString())
+                output.forEach { (key, value) -> append(key, value) }
 
                 if (supportsInputFidelity(model))
                     append("input_fidelity", "high")
@@ -190,6 +236,17 @@ class OpenAiImageClient(
         }
     }
 }
+
+private fun stillOutput(): List<Pair<String, String>> =
+    listOf("output_format" to OUTPUT_FORMAT, "output_compression" to OUTPUT_COMPRESSION.toString())
+
+// the edits endpoint takes a gif too, though the guide says it does not (measured 2026-11-05)
+private fun gifOutput(animation: ImageAnimation): List<Pair<String, String>> =
+    listOf(
+        "output_format" to GIF_FORMAT,
+        "frame_count" to animation.frames.toString(),
+        "frame_duration_ms" to animation.frameDurationMs.toString(),
+    )
 
 /**
  * `input_fidelity` holds a face or logo still through an edit, so the bot keeps its reference face. Only the

@@ -2,6 +2,7 @@ package com.helltar.vusan.tools.imagegen
 
 import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.infra.Http
+import com.helltar.vusan.llm.codex.CodexAuthStore
 import io.ktor.client.engine.mock.*
 import io.ktor.client.request.forms.*
 import io.ktor.http.*
@@ -223,6 +224,87 @@ class OpenAiImageClientTest {
         assertEquals(ImageModerationStage.OUTPUT, blocked.stage)
         assertEquals(listOf("violence"), blocked.categories)
         http.close()
+    }
+
+    @Test
+    fun `an animation from a description posts a gif request with its frames and the size left to the service`() = runBlocking {
+        var path = ""
+        var payload = ""
+        val gif = byteArrayOf(0x47, 0x49, 0x46)
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    path = request.url.encodedPath
+                    payload = assertIs<TextContent>(request.body).text
+
+                    respond(
+                        content = """{"data":[{"b64_json":"${Base64.getEncoder().encodeToString(gif)}"}]}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                    )
+                },
+            )
+
+        val bytes =
+            OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), "gpt-image-2.6-flare", "low")
+                .animate("a fox wagging its tail", emptyList(), ImageAnimation(frames = 6, frameDurationMs = 120))
+
+        val body = Json.parseToJsonElement(payload).jsonObject
+
+        assertContentEquals(gif, bytes)
+        assertEquals("/v1/images/generations", path)
+        assertEquals("gif", body["output_format"]?.jsonPrimitive?.content)
+        assertEquals(6, body["frame_count"]?.jsonPrimitive?.content?.toInt())
+        assertEquals(120, body["frame_duration_ms"]?.jsonPrimitive?.content?.toInt())
+        // an explicit frame size overflows the sheet the frames are drawn on
+        assertEquals("auto", body["size"]?.jsonPrimitive?.content)
+        // compression is jpeg's and webp's, and a gif request carrying it is refused
+        assertFalse(body.containsKey("output_compression"))
+        http.close()
+    }
+
+    @Test
+    fun `an animation of pictures goes to the edits endpoint as a gif`() = runBlocking {
+        var path = ""
+        var form = ""
+        val http =
+            Http.createClient(
+                MockEngine { request ->
+                    path = request.url.encodedPath
+                    form = String(request.body.toByteArray(), Charsets.ISO_8859_1)
+
+                    respond(
+                        content = """{"data":[{"b64_json":"${Base64.getEncoder().encodeToString(byteArrayOf(1))}"}]}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+                    )
+                },
+            )
+
+        OpenAiImageClient(http, ImageAuth.ApiKey("sk-test"), "gpt-image-2.6-flare", "low")
+            .animate("make it wave", listOf(source("mascot.png", "image/png")), ImageAnimation(frames = 9, frameDurationMs = 200))
+
+        assertEquals("/v1/images/edits", path)
+        assertContains(form, "gif")
+        assertContains(form, """name="frame_count"""")
+        assertContains(form, """name="frame_duration_ms"""")
+        assertFalse(form.contains("output_compression"))
+        assertEquals(1, Regex("""name="image\[]"""").findAll(form).count())
+        http.close()
+    }
+
+    @Test
+    fun `the codex route draws no animation`() = runBlocking {
+        val client =
+            OpenAiImageClient(
+                Http.createClient(MockEngine { error("unused") }),
+                ImageAuth.Codex(CodexAuthStore(Http.createClient(MockEngine { error("unused") }))),
+                "gpt-image-2.6-flare",
+                "low",
+            )
+
+        assertFailsWith<IllegalStateException> { client.animate("a wave", emptyList(), ImageAnimation(9, 200)) }
+        Unit
     }
 
     private suspend fun editFormText(

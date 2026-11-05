@@ -14,6 +14,10 @@ internal data class OpenAiImageRequest(
     val outputFormat: String? = null,
     @SerialName("output_compression")
     val outputCompression: Int? = null,
+    @SerialName("frame_count")
+    val frameCount: Int? = null,
+    @SerialName("frame_duration_ms")
+    val frameDurationMs: Int? = null,
     val n: Int = 1,
 )
 

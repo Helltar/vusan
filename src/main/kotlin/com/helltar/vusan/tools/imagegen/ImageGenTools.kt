@@ -5,14 +5,12 @@ import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.extensionOfMime
 import com.helltar.vusan.common.imageDimensions
-import com.helltar.vusan.common.mimeTypeOfName
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sniffedImageMimeType
 import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFile
-import com.helltar.vusan.request.AttachedFileKind
 import com.helltar.vusan.tools.keepOnShelf
 import com.helltar.vusan.tools.keptNotSent
 import com.helltar.vusan.tools.refusedByChat
@@ -113,49 +111,15 @@ class ImageGenTools(
         if (send && !outbox.capabilities.photos)
             return@suspendToolGuard refusedByChat("photos")
 
-        val pictures = candidates.filter { it.kind == AttachedFileKind.IMAGE }
-
-        if (pictures.isEmpty())
-            return@suspendToolGuard candidates.firstOrNull()
-                ?.let { "`${it.name}` is not an image, so it can't be edited." }
-                ?: "No image is attached in this turn — ask the user to send or reply to one, or name one."
-
-        val editable = pictures.mapNotNull { file -> file.editContentTypeOrNull()?.let { file to it } }
-
-        if (editable.isEmpty())
-            return@suspendToolGuard "`${pictures.first().name}` is not a supported image type for editing — " +
-                    "use a PNG, JPEG, or WebP image."
-
         val self = selfImage?.reference?.takeIf { withYourself }
-        val sources = mutableListOf<SourceImage>()
 
-        // the model holds the first source closest to the original, so a picture of the bot puts its face
-        // there, the user's images after.
-        self?.let { sources += it }
-
-        var uploadBytes = self?.bytes?.size ?: 0
-
-        val taken = editable.take(client.maxEditImages - sources.size)
-
-        for ((file, contentType) in taken) {
-            file.fileSizeBytes?.let {
-                if (it > MAX_EDIT_IMAGE_BYTES)
-                    return@suspendToolGuard "`${file.name}` is too large to edit ($it bytes, limit $MAX_EDIT_IMAGE_BYTES)."
+        val collected =
+            when (val found = collectEditSources(candidates, self, client.maxEditImages)) {
+                is EditSources.Refused -> return@suspendToolGuard found.answer
+                is EditSources.Ready -> found
             }
 
-            val bytes = file.loadBytes()
-
-            if (bytes.size > MAX_EDIT_IMAGE_BYTES)
-                return@suspendToolGuard "`${file.name}` is too large to edit (${bytes.size} bytes, limit $MAX_EDIT_IMAGE_BYTES)."
-
-            uploadBytes += bytes.size
-
-            if (uploadBytes > MAX_EDIT_TOTAL_BYTES)
-                return@suspendToolGuard "The images add up to more than $MAX_EDIT_TOTAL_BYTES bytes — " +
-                        "ask the user which of them the edit is about."
-
-            sources += SourceImage(bytes, file.name, contentType)
-        }
+        val sources = collected.images
 
         val asked = ImageFraming.of(orientation)
         val framing = if (self != null && asked == ImageFraming.AUTO) sceneFraming(sources[1]) else asked
@@ -182,12 +146,7 @@ class ImageGenTools(
         val name = imageFilename(bytes)
         val label = keepOnShelf(name, bytes)
 
-        val left =
-            if (taken.size < editable.size)
-                " The provider edits at most ${client.maxEditImages} images at once, so only the first ${taken.size} " +
-                        "of the ${editable.size} were used; tell the user if that matters."
-            else
-                ""
+        val left = collected.leftOut(client.maxEditImages)
 
         if (!send) return@suspendToolGuard keptNotSent("The edited image (${framing.label}, ${bytes.size} bytes)", label) + left
 
@@ -199,11 +158,6 @@ class ImageGenTools(
 
     companion object {
         const val IMAGE_PROMPT_MAX_CHARS = 32_000
-        const val MAX_EDIT_IMAGE_BYTES = 25 * 1024 * 1024
-
-        // per upload, not per image: ten album photos at the per-image limit would be a quarter-gigabyte
-        // request spending its five-minute timeout uploading.
-        const val MAX_EDIT_TOTAL_BYTES = 45 * 1024 * 1024
 
         private val log = KotlinLogging.logger {}
     }
@@ -213,7 +167,7 @@ class ImageGenTools(
  * What to do after a content-filter refusal, which depends on the side: a prompt it never drew must change,
  * while a picture drawn and then withheld is often only a retry away.
  */
-private fun ImageModerationBlocked.advice(): String {
+internal fun ImageModerationBlocked.advice(): String {
     val flagged = categories.takeIf { it.isNotEmpty() }?.let { " (flagged: ${it.joinToString()})" }.orEmpty()
 
     return when (stage) {
@@ -233,18 +187,6 @@ private fun ImageModerationBlocked.advice(): String {
                     "or tell the user this picture cannot be generated."
     }
 }
-
-private val SUPPORTED_EDIT_MIME_TYPES = setOf("image/png", "image/jpeg", "image/webp")
-
-private fun AttachedFile.editContentTypeOrNull(): String? {
-    mimeType?.lowercase()?.let { if (it in SUPPORTED_EDIT_MIME_TYPES) return it }
-
-    return imageContentTypeOrNull(name)
-}
-
-/** The image types both edit routes accept, read off a filename when nothing else declares one. */
-internal fun imageContentTypeOrNull(filename: String): String? =
-    mimeTypeOfName(filename)?.takeIf { it in SUPPORTED_EDIT_MIME_TYPES }
 
 /**
  * An `auto` edit is framed like its first source, so with the bot's likeness first, `auto` takes the edited

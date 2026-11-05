@@ -19,6 +19,26 @@ interface ImageClient {
      * holds the first image closest to the original, so a picture of the bot puts its reference photo there.
      */
     suspend fun edit(prompt: String, images: List<SourceImage>, framing: ImageFraming): ByteArray
+
+    /**
+     * Draws a looping GIF, from [images] when there are any and from [prompt] alone otherwise. The frame size
+     * is the provider's: frames are drawn as one sheet, and a size that fits a still picture can overflow it.
+     */
+    suspend fun animate(prompt: String, images: List<SourceImage>, animation: ImageAnimation): ByteArray
+}
+
+/** How many frames a GIF has and how long each is shown. */
+data class ImageAnimation(val frames: Int, val frameDurationMs: Int) {
+    init {
+        require(frames in FRAMES) { "frames must be in $FRAMES, got $frames" }
+        require(frameDurationMs in FRAME_DURATION_MS) { "frameDurationMs must be in $FRAME_DURATION_MS, got $frameDurationMs" }
+    }
+
+    companion object {
+        // the api takes up to 64; openai's own client stops at 16, past which a short video is the better tool
+        val FRAMES = 2..16
+        val FRAME_DURATION_MS = 20..2000
+    }
 }
 
 /** The framing a picture is asked for; each provider turns it into its own size or aspect ratio. */

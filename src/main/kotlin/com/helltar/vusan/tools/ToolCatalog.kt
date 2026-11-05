@@ -19,6 +19,7 @@ enum class ToolGroup(val summary: String) {
     WEB_PUBLISHING("put a page, game or small app built in the sandbox on the internet at its own address, and keep it online longer"),
     POLLS("create a poll or a quiz in the chat and follow who answered what"),
     GIFS("find and send a ready-made GIF and, where the deployment has them, a meme picture or a short clip"),
+    DRAWN_GIFS("draw a new animated GIF from a description or from pictures, with the bot in it if asked"),
     TELEGRAM_CHANNELS("recap a public channel by day or week, search its posts, and read the pictures in them"),
     FILE_TRANSFERS("send a document to the chat, or download a link into a file"),
     VIDEOS("make a short video with sound from a description or a picture, with the bot in it if asked, or edit or extend a video"),

@@ -33,6 +33,7 @@ import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
 import com.helltar.vusan.tools.giphy.GiphyTools
 import com.helltar.vusan.tools.grouplog.GroupLogTools
+import com.helltar.vusan.tools.imagegen.AnimationTools
 import com.helltar.vusan.tools.imagegen.ImageAuth
 import com.helltar.vusan.tools.imagegen.ImageClient
 import com.helltar.vusan.tools.imagegen.ImageGenTools
@@ -310,6 +311,9 @@ class ToolCatalogFactory(
             // its two schemas cost to carry.
             if (imageClient != null && image != null) {
                 tools(ImageGenTools(imageClient, image, outbox, context.attachedFiles, selfImage))
+
+                if (image.drawsGifs)
+                    tools(ToolGroup.DRAWN_GIFS, AnimationTools(imageClient, image, outbox, context.attachedFiles, selfImage))
             }
 
             videoClient?.let { tools(ToolGroup.VIDEOS, VideoGenTools(it, outbox, context.attachedFiles, selfImage)) }
