@@ -26,8 +26,7 @@ import kotlin.test.assertTrue
 
 class CodexImageClientTest {
 
-    private val config =
-        ImageProviderConfig.Codex(model = "gpt-image-2", quality = "low")
+    private val config = ImageProviderConfig.Codex()
 
     @Test
     fun `generate targets the codex backend with the chatgpt session`() = runBlocking {
@@ -49,7 +48,13 @@ class CodexImageClientTest {
 
                     val payload = Json.parseToJsonElement(assertIs<TextContent>(request.body).text).jsonObject
                     assertEquals("gpt-image-2", payload["model"]?.jsonPrimitive?.content)
-                    assertEquals("a red panda", payload["prompt"]?.jsonPrimitive?.content)
+                    assertEquals("auto", payload["quality"]?.jsonPrimitive?.content)
+                    // the plan sizes from the prompt alone, so the framing is spelled out there
+                    assertEquals("auto", payload["size"]?.jsonPrimitive?.content)
+                    assertEquals(
+                        "a red panda\n\nOutput format: square image, 1:1 aspect ratio.",
+                        payload["prompt"]?.jsonPrimitive?.content,
+                    )
 
                     // the codex request has no moderation field; sending one risks the whole request
                     assertFalse(payload.containsKey("moderation"))
@@ -83,7 +88,10 @@ class CodexImageClientTest {
                         "data:image/png;base64,${Base64.getEncoder().encodeToString(source)}",
                         images[0].jsonObject["image_url"]?.jsonPrimitive?.content,
                     )
-                    assertEquals("make it blue", payload["prompt"]?.jsonPrimitive?.content)
+                    assertEquals(
+                        "make it blue\n\nOutput format: square image, 1:1 aspect ratio.",
+                        payload["prompt"]?.jsonPrimitive?.content,
+                    )
                     assertEquals("gpt-image-2", payload["model"]?.jsonPrimitive?.content)
 
                     // gpt-image-2 infers the output size from the source

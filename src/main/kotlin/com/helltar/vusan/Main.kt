@@ -413,9 +413,23 @@ private fun logStartup(
 
     log.info {
         config.image?.let { image ->
-            "Images: provider=[${image.name}]" + imagePlan?.let { " plan=[$it]" }.orEmpty() +
-                    " model=[${image.model}] quality=[${image.quality}] gifs=[${if (image.drawsGifs) "on" else "off"}]"
+            val drawing =
+                when (image) {
+                    // the plan rewrites whatever is asked to its own model and quality
+                    is ImageProviderConfig.Codex -> " model=[the plan's own]"
+                    is ImageProviderConfig.OpenAi -> " model=[${image.model}] quality=[${image.quality}]"
+                }
+
+            "Images: provider=[${image.name}]" + imagePlan?.let { " plan=[$it]" }.orEmpty() + drawing +
+                    " gifs=[${if (image.drawsGifs) "on" else "off"}]"
         } ?: "Images: off (IMAGE_PROVIDER not set)"
+    }
+
+    (config.image as? ImageProviderConfig.Codex)?.ignoredEnv?.takeIf { it.isNotEmpty() }?.let { ignored ->
+        log.warn {
+            "Images: ${ignored.joinToString(" and ")} ignored: IMAGE_PROVIDER=[codex] draws with the plan's own " +
+                    "model and quality"
+        }
     }
 
     log.info {

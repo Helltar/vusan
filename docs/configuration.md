@@ -223,8 +223,8 @@ the [Appearance](#appearance) photo; without one, only voice messages are offere
 |------------------------|-----------------------|----------------------------------|
 | `IMAGE_PROVIDER`       | unset                 | `openai` or `codex`.             |
 | `OPENAI_IMAGE_API_KEY` | —                     | The key `openai` draws with.     |
-| `IMAGE_MODEL`          | `gpt-image-2.6-flare` | Model for new and edited images. |
-| `IMAGE_QUALITY`        | `medium`              | See below.                       |
+| `IMAGE_MODEL`          | `gpt-image-2.6-flare` | `openai` only: the model.        |
+| `IMAGE_QUALITY`        | `medium`              | `openai` only: see below.        |
 
 - **`openai`** — OpenAI's image API, billed per image. `gpt-image-2.6-flare` is the fast one;
   `gpt-image-2.6-sunburst` costs the same and takes about twice as long, for more detail and faces and
@@ -232,8 +232,8 @@ the [Appearance](#appearance) photo; without one, only voice messages are offere
   `max` need `gpt-image-2.5` or later, and models before `gpt-image-2` lack wide framings. From
   `gpt-image-2.6` on, it also draws animated GIFs (`animateImage`).
 - **`codex`** — the ChatGPT subscription signed in through `CODEX_HOME`, with no key, counted against
-  the chat's usage limit. The subscription draws with its own current model whatever `IMAGE_MODEL`
-  names, picks the size itself, and draws no GIFs.
+  the chat's usage limit. The subscription draws with its own model at its own quality, so it takes no
+  `IMAGE_MODEL` or `IMAGE_QUALITY` (startup warns when either is set), and it draws no GIFs.
 
 ### Video generation
 

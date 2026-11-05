@@ -137,8 +137,8 @@ Part of the [architecture index](../architecture.md).
   size the configured model takes, and reads off it how many sources one edit takes, so an album beyond it is cut down
   with the result saying so. An edit left to `auto` is framed like its first source, so when
   that source is the bot's likeness the tool asks for the framing nearest to the picture being edited instead. The
-  subscription's backend takes these as hints only: it draws with its own current model whatever `IMAGE_MODEL` names,
-  and picks the size itself.
+  subscription's backend rewrites model, quality and size to its own, so `ImageProviderConfig.Codex` asks for what the
+  Codex CLI does (`gpt-image-2`, `auto`) and the client writes the framing into the prompt, which the plan follows.
 
   Animated GIFs are the Platform's alone, on a model from `gpt-image-2.6` on (`ImageProviderConfig.drawsGifs`):
   `AnimationTools` sits behind the `drawn_gifs` group and calls `ImageClient.animate`, which sends a description to

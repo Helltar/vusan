@@ -32,6 +32,9 @@ private const val OUTPUT_FORMAT = "jpeg"
 private const val OUTPUT_COMPRESSION = 95
 private const val GIF_FORMAT = "gif"
 
+// what the codex cli sends; the plan sizes from the prompt whatever is here
+private const val CODEX_SIZE = "auto"
+
 // a gif's frames are drawn as one sheet within the still picture's pixel budget, so an explicit frame size
 // fails for most frame counts (9 frames at 1024x1024 asks for a 3072x3072 sheet); `auto` fits the sheet,
 // at 512x512 frames as measured.
@@ -78,8 +81,8 @@ class OpenAiImageClient(
                     setBody(
                         OpenAiImageRequest(
                             model = model,
-                            prompt = prompt,
-                            size = framing.toSize(model),
+                            prompt = framedForCodex(prompt, framing),
+                            size = if (auth is ImageAuth.Codex) CODEX_SIZE else framing.toSize(model),
                             quality = quality,
                             moderation = platformOnly(MODERATION),
                             outputFormat = platformOnly(OUTPUT_FORMAT),
@@ -101,7 +104,7 @@ class OpenAiImageClient(
             imageRequest {
                 when (auth) {
                     is ImageAuth.ApiKey -> editViaPlatform(prompt, images, framing.toSize(model), stillOutput())
-                    is ImageAuth.Codex -> editViaCodex(prompt, images)
+                    is ImageAuth.Codex -> editViaCodex(framedForCodex(prompt, framing), images)
                 }
             }
 
@@ -198,6 +201,11 @@ class OpenAiImageClient(
             )
         }.observed().body()
 
+    // the plan picks the size from the prompt alone and drops the `size` field, so the framing is written into
+    // the text, which it does follow (square, 16:9 and 9:16 came back as asked, 2026-11-05)
+    private fun framedForCodex(prompt: String, framing: ImageFraming): String =
+        framing.formatLine()?.takeIf { auth is ImageAuth.Codex }?.let { "$prompt\n\n$it" } ?: prompt
+
     // a content-filter refusal is a different answer from a failed call, so it becomes its own exception
     // here, where the error shape is known.
     private suspend fun <T> imageRequest(block: suspend () -> T): T =
@@ -271,6 +279,17 @@ private fun ImageFraming.toSize(model: String): String {
         ImageFraming.AUTO -> "auto"
     }
 }
+
+/** The framing in words, for a backend that reads the shape off the prompt; `null` leaves it to the source. */
+private fun ImageFraming.formatLine(): String? =
+    when (this) {
+        ImageFraming.SQUARE -> "Output format: square image, 1:1 aspect ratio."
+        ImageFraming.PORTRAIT -> "Output format: portrait image, 2:3 aspect ratio."
+        ImageFraming.LANDSCAPE -> "Output format: landscape image, 3:2 aspect ratio."
+        ImageFraming.STORY -> "Output format: portrait image, 9:16 aspect ratio."
+        ImageFraming.BANNER -> "Output format: landscape image, 16:9 aspect ratio."
+        ImageFraming.AUTO -> null
+    }
 
 /**
  * Whether the model takes any `WIDTHxHEIGHT` (up to 3840px, edges multiples of 16, gpt-image-2 and later)

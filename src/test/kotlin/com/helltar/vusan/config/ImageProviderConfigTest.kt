@@ -9,9 +9,10 @@ import kotlin.test.assertTrue
 class ImageProviderConfigTest {
 
     @Test
-    fun `both providers default to the same current model`() {
+    fun `the platform defaults to the current model, and the plan asks for what the codex cli does`() {
         assertEquals("gpt-image-2.6-flare", ImageProviderConfig.OpenAi(apiKey = "sk-test").model)
-        assertEquals("gpt-image-2.6-flare", ImageProviderConfig.Codex().model)
+        assertEquals("gpt-image-2", ImageProviderConfig.Codex().model)
+        assertEquals("auto", ImageProviderConfig.Codex().quality)
     }
 
     @Test
@@ -30,16 +31,15 @@ class ImageProviderConfigTest {
     }
 
     @Test
-    fun `every documented quality is accepted by both providers`() {
+    fun `every documented quality is accepted`() {
         ImageProviderConfig.OpenAi.QUALITIES.forEach { quality ->
             assertEquals(quality, ImageProviderConfig.OpenAi(apiKey = "sk-test", quality = quality).quality)
-            assertEquals(quality, ImageProviderConfig.Codex(quality = quality).quality)
         }
     }
 
     @Test
     fun `a quality outside the documented set stops the startup`() {
-        assertFailsWith<IllegalArgumentException> { ImageProviderConfig.Codex(quality = "ultra") }
+        assertFailsWith<IllegalArgumentException> { ImageProviderConfig.OpenAi(apiKey = "sk-test", quality = "ultra") }
         assertFailsWith<IllegalArgumentException> { ImageProviderConfig.OpenAi(apiKey = "sk-test", model = " ") }
     }
 

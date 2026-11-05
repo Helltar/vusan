@@ -368,7 +368,8 @@ data class AppConfig(
         }
 
         // pictures have their own provider: an openai api key, or the subscription signed in through
-        // CODEX_HOME whether or not chat runs there. nothing switches on without one.
+        // CODEX_HOME whether or not chat runs there. nothing switches on without one, and the subscription
+        // takes neither a model nor a quality.
         private fun resolveImageProvider(): ImageProviderConfig? {
             val provider = readEnv("IMAGE_PROVIDER")?.trim()?.lowercase() ?: return null
             val model = readEnv("IMAGE_MODEL")
@@ -386,8 +387,7 @@ data class AppConfig(
                     ImageProviderConfig.Codex(
                         authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                         clientVersion = resolveCodexClientVersion(),
-                        model = model ?: ImageProviderConfig.OpenAi.DEFAULT_MODEL,
-                        quality = quality ?: ImageProviderConfig.OpenAi.DEFAULT_QUALITY,
+                        ignoredEnv = listOfNotNull(model?.let { "IMAGE_MODEL" }, quality?.let { "IMAGE_QUALITY" }),
                     )
 
                 else -> error("Unsupported IMAGE_PROVIDER=[$provider]. Supported values: openai, codex")

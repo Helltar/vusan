@@ -4,9 +4,9 @@ import com.helltar.vusan.llm.codex.defaultCodexAuthFile
 import java.nio.file.Path
 
 /**
- * Who renders a picture, and so who is billed. `IMAGE_PROVIDER` names it, every provider takes `IMAGE_MODEL`
- * and `IMAGE_QUALITY`, and each has its own way in: a key or the signed-in ChatGPT subscription. Without a
- * provider the drawing tools stay out.
+ * Who renders a picture, and so who is billed. `IMAGE_PROVIDER` names it, and each has its own way in: a key,
+ * which takes `IMAGE_MODEL` and `IMAGE_QUALITY`, or the signed-in ChatGPT subscription, which draws as it
+ * sees fit. Without a provider the drawing tools stay out.
  */
 sealed interface ImageProviderConfig {
     val name: String
@@ -34,7 +34,6 @@ sealed interface ImageProviderConfig {
         }
 
         companion object {
-            // also the codex default, though that backend draws with its own current model whatever is named
             const val DEFAULT_MODEL = "gpt-image-2.6-flare"
             const val DEFAULT_QUALITY = "medium"
 
@@ -49,27 +48,27 @@ sealed interface ImageProviderConfig {
     }
 
     /**
-     * The Codex backend, metered against the ChatGPT subscription signed in at [authFile]. It renders on
-     * OpenAI's models, so it takes [OpenAi]'s defaults and qualities, though it draws with its own current
-     * model whatever [model] names.
+     * The Codex backend, metered against the ChatGPT subscription signed in at [authFile]. It draws with the
+     * plan's own model at the plan's own quality whatever is asked, so it asks for what the Codex CLI does;
+     * [ignoredEnv] names the settings the operator set for it anyway.
      */
     data class Codex(
         val authFile: Path = defaultCodexAuthFile(),
         // the Codex CLI version claimed; `null` claims the newest of the floor, the CLI and the latest
         // release
         val clientVersion: String? = null,
-        override val model: String = OpenAi.DEFAULT_MODEL,
-        override val quality: String = OpenAi.DEFAULT_QUALITY,
+        val ignoredEnv: List<String> = emptyList(),
     ) : ImageProviderConfig {
 
         override val name: String = "codex"
 
+        // the backend rewrites both to its own (`gpt-image-2-codex` at `low`, 2026-11-05), so these are only
+        // what the cli sends
+        override val model: String = "gpt-image-2"
+        override val quality: String = "auto"
+
         // the backend answers a gif request with "GIF output is not enabled for this request" (2026-11-05)
         override val drawsGifs: Boolean = false
-
-        init {
-            requireOpenAiModel(model, quality)
-        }
     }
 }
 
