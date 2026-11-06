@@ -46,8 +46,10 @@ class ChatSettingsTools(
         require(photo.kind == AttachedFileKind.IMAGE) { "`${photo.name}` is not a picture" }
         telegram.requireSenderHolds(context, ChatRight.CHANGE_INFO)
 
-        val bytes = photo.loadBytes()
-        telegram.api { executeAsync(SetChatPhoto.builder().chatId(chatId).photo(bytes.asInputFile(photo.name)).build()) }
+        // the library uploads setChatPhoto's file as a form part named after the file, not `photo`, and adds no
+        // `photo` field pointing at it, so only a file named `photo` reaches telegram as the photo.
+        val upload = photo.loadBytes().asInputFile(SetChatPhoto.PHOTO_FIELD)
+        telegram.api { executeAsync(SetChatPhoto.builder().chatId(chatId).photo(upload).build()) }
 
         "The group's photo is now `${photo.name}`."
     }

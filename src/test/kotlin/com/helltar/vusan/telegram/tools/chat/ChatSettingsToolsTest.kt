@@ -7,12 +7,16 @@ import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.telegram.ChatProfiles
 import com.helltar.vusan.tools.toolFailure
+import com.sun.net.httpserver.HttpServer
+import java.net.InetAddress
+import java.net.InetSocketAddress
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.runBlocking
+import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient
+import org.telegram.telegrambots.meta.TelegramUrl
 import org.telegram.telegrambots.meta.api.methods.groupadministration.SetChatDescription
-import org.telegram.telegrambots.meta.api.methods.groupadministration.SetChatPhoto
 import org.telegram.telegrambots.meta.api.methods.groupadministration.SetChatTitle
 import org.telegram.telegrambots.meta.api.objects.ChatPermissions
 
@@ -57,13 +61,41 @@ class ChatSettingsToolsTest {
     }
 
     @Test
-    fun `the attached picture becomes the photo`() = runBlocking {
-        val chat = FakeChat()
-        val picture = AttachedFile("avatar.png", 3, "image/png", AttachedFileKind.IMAGE) { byteArrayOf(1, 2, 3) }
+    fun `the attached picture reaches telegram as the photo`() = runBlocking {
+        val bot = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
+        val uploads = mutableListOf<String>()
 
-        tools(chat, groupContext(listOf(picture))).setChatPhoto()
+        // the real client builds the multipart body, so the test sees what telegram would
+        bot.createContext("/") { exchange ->
+            val method = exchange.requestURI.path.substringAfterLast('/')
+            val body = exchange.requestBody.readAllBytes().decodeToString()
+            if (method == "setChatPhoto") uploads += body
 
-        assertEquals(listOf("avatar.png"), chat.changes.filterIsInstance<SetChatPhoto>().map { it.photo.mediaName })
+            val answer =
+                when (method) {
+                    "getChatMember" -> """{"ok":true,"result":{"status":"creator","is_anonymous":false,"user":{"id":7,"is_bot":false,"first_name":"Ann"}}}"""
+                    else -> """{"ok":true,"result":true}"""
+                }.toByteArray()
+
+            exchange.responseHeaders.add("Content-Type", "application/json")
+            exchange.sendResponseHeaders(200, answer.size.toLong())
+            exchange.responseBody.use { it.write(answer) }
+        }
+
+        bot.start()
+
+        try {
+            val client = OkHttpTelegramClient("1:token", TelegramUrl("http", "127.0.0.1", bot.address.port, false))
+            val picture = AttachedFile("pride.jpg", 9, "image/jpeg", AttachedFileKind.IMAGE) { "jpeg-bytes".toByteArray() }
+
+            ChatSettingsTools(client, ChatProfiles(client, botId = 1), groupContext(listOf(picture))).setChatPhoto()
+        } finally {
+            bot.stop(0)
+        }
+
+        val upload = uploads.single()
+        assertTrue(upload.contains("""name="photo""""), upload)
+        assertTrue(upload.contains("jpeg-bytes"), upload)
     }
 
     @Test
