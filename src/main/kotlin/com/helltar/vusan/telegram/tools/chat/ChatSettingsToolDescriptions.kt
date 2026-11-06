@@ -9,7 +9,8 @@ internal object ChatSettingsToolDescriptions {
                 "Telegram announces the change in the chat itself, so a short word from you is enough."
 
     const val PHOTO_IMAGE =
-        "Optional picture to use instead of the attachment: one an earlier call made (`#3/1`), such as a generated image, or one in the sandbox (`sandbox:out/avatar.png`)."
+        "Optional picture to use instead of the attachment: one an earlier call made (`#3/1`), such as a generated image, or one in the sandbox (`sandbox:out/avatar.png`). " +
+                "To start from the current photo, fetch it with `getChatPhoto` and `send` set to `false`."
 
     const val SET_CHAT_TITLE =
         "Renames this group. " +

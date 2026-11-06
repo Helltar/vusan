@@ -8,6 +8,7 @@ import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.telegram.ChatProfiles
+import com.helltar.vusan.telegram.tools.chat.ChatPhotoTools
 import com.helltar.vusan.telegram.tools.chat.ChatSettingsTools
 import com.helltar.vusan.telegram.tools.chat.ForumTopicTools
 import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
@@ -100,6 +101,16 @@ class TelegramToolSetsTest {
             listOf(ChatFileTools::class, StickerTools::class, ChatSettingsTools::class),
             toolSetsFor(ChatCapabilities(chatInfo = true)).map { it.set::class },
         )
+    }
+
+    // any member sees a group's photo, so reading it needs no admin right, and a private chat has none of its own
+    @Test
+    fun `a group gets its photo behind a group, a private chat does not`() {
+        val group = TelegramToolSets(client, delivery, profiles).of(requestContext(isPrivate = false), BotOutbox())
+        val private = TelegramToolSets(client, delivery, profiles).of(requestContext(), BotOutbox())
+
+        assertEquals(ToolGroup.CHAT_PHOTO, group.single { it.set is ChatPhotoTools }.group)
+        assertEquals(emptyList(), private.filter { it.set is ChatPhotoTools })
     }
 
     private fun toolSetsFor(capabilities: ChatCapabilities): List<PlatformToolSet> =

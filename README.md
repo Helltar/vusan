@@ -69,7 +69,7 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 - **Leaves you be** — stops writing to you on its own when you ask, until you say otherwise.
 - **Stickers** — learns your chat's sticker collection and picks fitting replies from it.
 - **Forum topics** — answers, notices and scheduled reminders stay in the topic they belong to; as an admin it opens, renames, closes and reopens topics when asked.
-- **Group settings** — as an admin, changes the group's photo, title or description when someone who may do it asks.
+- **Group settings** — shows the group's current photo or works from it, and as an admin changes the group's photo, title or description when someone who may do it asks.
 
 ### Understands what you send
 

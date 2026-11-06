@@ -121,7 +121,9 @@ Telegram hiccup never strips tools. What a group admin can change is in
 
 ### Group settings and topics
 
-Where Vusan is an admin with the right to, it changes the group's photo, title or description, and
+Anyone in a group may ask Vusan to show the group's current photo or to start from it, to describe,
+redraw or edit it, since any member can see it. Where Vusan is an admin with the right to, it changes
+the group's photo, title or description, and
 opens, renames, closes or reopens forum topics, but only when someone asks and only for someone who
 could do it themselves. A member may ask to change the group's info where every member may (never in
 a public group, where Telegram leaves that to admins) and to open a topic where every member may

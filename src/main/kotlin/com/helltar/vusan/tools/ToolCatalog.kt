@@ -23,6 +23,7 @@ enum class ToolGroup(val summary: String) {
     TELEGRAM_CHANNELS("recap a public channel by day or week, search its posts, and read the pictures in them"),
     FILE_TRANSFERS("send a document to the chat, or download a link into a file"),
     VIDEOS("make a short video with sound from a description or a picture, with the bot in it if asked, or edit or extend a video"),
+    CHAT_PHOTO("get this group's current photo, to show it, look at it, or edit or redraw it"),
     CHAT_SETTINGS("change this group's photo, title or description"),
     FORUM_TOPICS("open a new forum topic in this group, with a first message if wanted, and rename, close or reopen one");
 
