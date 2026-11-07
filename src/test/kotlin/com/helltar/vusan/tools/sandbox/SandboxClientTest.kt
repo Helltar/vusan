@@ -56,7 +56,7 @@ class SandboxClientTest {
         val bounds = mutableListOf<String?>()
         val http = Http.createClient(MockEngine { request ->
             if (request.url.encodedPath == "/v1/sandboxes") return@MockEngine json(sandboxInfo("telegram:1"))
-            bounds += request.url.parameters["maxBytes"]
+            if (request.url.encodedPath.endsWith("/files/content")) bounds += request.url.parameters["maxBytes"]
             respond(
                 problemDocument("payload_too_large", 413, "Payload too large", "`/home/sandbox/sample.bin` is larger than 4 bytes"),
                 HttpStatusCode.PayloadTooLarge,
@@ -224,6 +224,17 @@ class SandboxClientTest {
 
         assertFalse(assertNotNull(client(MockEngine { json(serverInfo(protocol = 99)) }).serverOrNull()).compatible)
         assertNull(client(MockEngine { throw ConnectException("refused") }).serverOrNull())
+    }
+
+    // the server owns the limit and the bot only holds it to what it keeps in memory at once
+    @Test
+    fun `a file may be as large as the server allows, up to what the bot holds in memory`() = runBlocking {
+        fun client(engine: MockEngine) = SandboxClient(Http.createClient(engine), "http://sandbox", "test-token")
+        val mb = 1024 * 1024
+
+        assertEquals(64 * mb, client(MockEngine { json(serverInfo()) }).fileLimitBytes())
+        assertEquals(100 * mb, client(MockEngine { json(serverInfo().replace("67108864", "${500L * mb}")) }).fileLimitBytes())
+        assertEquals(100 * mb, client(MockEngine { throw ConnectException("refused") }).fileLimitBytes())
     }
 
     @Test

@@ -4,12 +4,14 @@ import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
+import com.helltar.vusan.common.asFileSize
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sanitizeFilename
 import com.helltar.vusan.common.xmlBlock
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.AttachedFileKind
+import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.request.attachedFileKindOf
 import com.helltar.vusan.request.isAnimationFile
 import com.helltar.vusan.tools.requireToolText
@@ -36,6 +38,8 @@ class SandboxTools(
     // the attachments and what other calls made, which reach the turn's directory here before the next piece
     // of work
     private val shelf: TurnShelf,
+    // the most the chat takes in one message, which a call's files are held to as well
+    private val maxUploadBytes: Long = PlatformLimits.TELEGRAM.uploadBytes,
 ) : ToolSet {
 
     @Tool(SandboxToolDescriptions.RUN_COMMAND)
@@ -196,11 +200,12 @@ class SandboxTools(
         val others = mutableListOf<Pair<BotOutput, String>>()
         val sent = mutableListOf<String>()
         val failed = mutableListOf<String>()
-        var remainingBytes = SANDBOX_FILE_LIMIT
+        val budget = minOf(sandbox.fileLimitBytes().toLong(), maxUploadBytes).toInt()
+        var remainingBytes = budget
 
         wanted.forEach { path ->
             val bytes = runCatching {
-                require(remainingBytes > 0) { "The 50 MB transfer budget has been used" }
+                require(remainingBytes > 0) { "The ${budget.toLong().asFileSize()} transfer budget has been used" }
                 sandbox.readFile(path, remainingBytes)
             }.getOrElse {
                 it.rethrowIfCancellation()

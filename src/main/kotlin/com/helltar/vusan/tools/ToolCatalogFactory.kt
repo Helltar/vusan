@@ -274,7 +274,7 @@ class ToolCatalogFactory(
                     // reset by either set is seen by the other.
                     val sandbox = client.sandboxOf(person)
                     shelf.connectSandbox(sandbox)
-                    tools(SandboxTools(sandbox, outbox, shelf))
+                    tools(SandboxTools(sandbox, outbox, shelf, config.platformLimits.uploadBytes))
                     tools(ToolGroup.SANDBOX_MANAGEMENT, SandboxManagementTools(sandbox))
                     // publishing is the same server's: without a pages role it answers `not_implemented`,
                     // which the model is told instead of the tool going missing.

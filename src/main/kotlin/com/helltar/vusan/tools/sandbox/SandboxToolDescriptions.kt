@@ -102,7 +102,7 @@ internal object SandboxToolDescriptions {
         "Sends finished files from the sandbox to the chat: images as photos, GIFs as animations, videos as videos, and other files as documents, unless `sendAs` asks for something else. " +
                 "Files may come from this person's other chats; send only files requested for the current chat. " +
                 "For a multi-file project, create and send an archive. " +
-                "At most 10 files and 50 MB total per call."
+                "At most 10 files per call, together no larger than one file the sandbox or the chat may move; the result names the limit when it is reached."
 
     const val SEND_PATHS =
         "Paths relative to the home, for example `project/result.zip`."

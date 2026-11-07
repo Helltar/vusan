@@ -26,7 +26,9 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 
-internal const val SANDBOX_FILE_LIMIT = 50 * 1024 * 1024
+// the most of one file the bot moves to or from a sandbox: the sdk carries a file as one ByteArray, so it is
+// held in memory whole. the server's own maxFileBytes may be lower, and then it is the limit
+private const val BOT_FILE_LIMIT = 100 * 1024 * 1024
 
 /**
  * The bot's side of a Regolith server: one sandbox per person, holding their home.
@@ -89,21 +91,26 @@ class SandboxClient(
             return call { sandbox.execs() }.map { it.result(output = "", nextOffset = 0, hasMore = false) }
         }
 
+        override suspend fun fileLimitBytes(): Int = this@SandboxClient.fileLimitBytes()
+
         suspend fun writeFile(path: String, bytes: ByteArray) {
-            require(bytes.size <= SANDBOX_FILE_LIMIT) { "File exceeds the 50 MB transfer limit" }
+            val limit = fileLimitBytes()
+            require(bytes.size <= limit) { "File exceeds the ${limit.toLong().asFileSize()} transfer limit" }
             call { sandbox().files.write(path, bytes) }
         }
 
-        suspend fun readFile(path: String, maxBytes: Int = SANDBOX_FILE_LIMIT): ByteArray {
-            require(maxBytes in 1..SANDBOX_FILE_LIMIT) { "Invalid file transfer budget" }
+        suspend fun readFile(path: String, maxBytes: Int? = null): ByteArray {
+            val limit = fileLimitBytes()
+            val budget = maxBytes ?: limit
+            require(budget in 1..limit) { "Invalid file transfer budget" }
 
             return call {
                 try {
-                    sandbox().files.read(path, maxBytes.toLong())
+                    sandbox().files.read(path, budget.toLong())
                 } catch (e: RegolithException) {
                     // only here, bounded by this call's budget, does the code mean the file does not fit;
                     // elsewhere it is a site too large, which the server explains.
-                    if (e.code == ErrorCodes.PAYLOAD_TOO_LARGE) error("`$path` is larger than the ${maxBytes.toLong().asFileSize()} this read may take") else throw e
+                    if (e.code == ErrorCodes.PAYLOAD_TOO_LARGE) error("`$path` is larger than the ${budget.toLong().asFileSize()} this read may take") else throw e
                 }
             }
         }
@@ -248,6 +255,16 @@ class SandboxClient(
 
             return read.exec.result(read)
         }
+    }
+
+    /**
+     * The largest file that moves either way: the server's `maxFileBytes`, held to what the bot keeps in memory
+     * at once. A server that does not say lets the bot's own limit stand; it refuses a larger file itself.
+     */
+    suspend fun fileLimitBytes(): Int {
+        val server = limitsOrNull()?.maxFileBytes?.takeIf { it > 0 } ?: return BOT_FILE_LIMIT
+
+        return minOf(server, BOT_FILE_LIMIT.toLong()).toInt()
     }
 
     /** The server owns its limits; a timeout above the ceiling would be refused, not trimmed. */

@@ -128,10 +128,15 @@ class TurnShelf(
     private suspend fun copyAttachment(sandbox: ShelfSandbox, index: Int, file: AttachedFile): String {
         val path = "$directory/00-$index-${file.name.sanitizeFilename().ifBlank { "attachment" }}"
 
-        if ((file.fileSizeBytes ?: 0) > MAX_ATTACHMENT_BYTES) return "`${file.name}` is over the $MAX_ATTACHMENT_MB MB an attachment may bring in"
+        // an attachment is held to what a sandbox file may be: telegram's own server serves less than that, but a
+        // local one serves a file of any size
+        val limit = sandbox.fileLimitBytes()
+        val tooLarge = "over the ${limit.toLong().asFileSize()} an attachment may bring in"
+
+        if ((file.fileSizeBytes ?: 0) > limit) return "`${file.name}` is $tooLarge"
 
         return copy(sandbox, path) {
-            file.loadBytes().also { require(it.size <= MAX_ATTACHMENT_BYTES) { "over the $MAX_ATTACHMENT_MB MB an attachment may bring in" } }
+            file.loadBytes().also { require(it.size <= limit) { tooLarge } }
         }
     }
 
@@ -207,7 +212,7 @@ class TurnShelf(
         if (reference.startsWith(SANDBOX_REFERENCE_PREFIX)) {
             val (sandbox, path) = sandboxReference(reference)
 
-            return keptFile(path.substringAfterLast('/'), sizeBytes = null) { sandbox.read(path, MAX_FILE_BYTES) }
+            return keptFile(path.substringAfterLast('/'), sizeBytes = null) { sandbox.read(path, sandbox.fileLimitBytes()) }
         }
 
         require(!RESULT.matches(reference)) { "`$reference` is the text of a result; a file is named like `$reference/1`" }
@@ -328,13 +333,7 @@ class TurnShelf(
 
         // what one turn may hold besides the outbox; downloads are the large ones
         const val MAX_KEPT_BYTES = 200L * 1024 * 1024
-        const val MAX_FILE_BYTES = 50 * 1024 * 1024
         const val MAX_TEXT_BYTES = 1024 * 1024
-
-        // an attachment is copied into the sandbox, so it is held to what a file there may be: telegram's own
-        // server serves less than that, but a local one serves a file of any size
-        const val MAX_ATTACHMENT_BYTES = MAX_FILE_BYTES
-        const val MAX_ATTACHMENT_MB = MAX_ATTACHMENT_BYTES / (1024 * 1024)
     }
 }
 
@@ -342,6 +341,9 @@ class TurnShelf(
  * What the shelf needs of the person's sandbox: reading a referenced file and keeping the turn's directory.
  */
 interface ShelfSandbox {
+
+    /** The largest file that may move either way. */
+    suspend fun fileLimitBytes(): Int
 
     /** The whole file at [path]; one over [maxBytes] fails with [FileTooLarge] before any of it moves. */
     suspend fun read(path: String, maxBytes: Int): ByteArray
@@ -355,7 +357,7 @@ interface ShelfSandbox {
 
     /** The over-cap read failure; the decoder hands its message to the model as is. */
     class FileTooLarge(path: String, maxBytes: Int) :
-        IllegalArgumentException("`$path` is larger than the ${maxBytes / (1024 * 1024)} MB a file may hold here")
+        IllegalArgumentException("`$path` is larger than the ${maxBytes.toLong().asFileSize()} a file may hold here")
 }
 
 private suspend fun copy(sandbox: ShelfSandbox, path: String, bytes: suspend () -> ByteArray): String =

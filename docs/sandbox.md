@@ -137,12 +137,16 @@ The server sets most limits and reports them in `GET /v1/info`. The bot adds a f
 | Command text                             | 16,000 characters                                              |
 | File written through a tool              | 400,000 characters of text                                     |
 | Text file read or edited through a tool  | 2 MB, and 60,000 characters per read                           |
-| Files sent out of the sandbox            | 10 files and 50 MB per call                                    |
-| Attachment copied in                     | 50 MB, or what the chat serves when that is less               |
-| What a turn made, in `turns/`            | 50 MB per file, 200 MB per turn                                |
-| A file handed to a tool as `sandbox:`    | 50 MB, or 1 MB where it stands in for text                     |
+| Files sent out of the sandbox            | 10 files per call, together within one file's limit and the chat's |
+| Attachment copied in                     | One file's limit                                               |
+| What a turn made, in `turns/`            | One file's limit per file, 200 MB per turn                     |
+| A file handed to a tool as `sandbox:`    | One file's limit, or 1 MB where it stands in for text          |
 | A path, a job or snapshot id             | 400 and 64 characters                                          |
 | Home size, memory, CPU, processes        | The server's per-sandbox settings                              |
+
+One file's limit is the server's `maxFileBytes`, held to 100 MB: the bot holds a file it moves in
+memory whole. Telegram's own Bot API serves a bot at most 20 MB of an attachment and takes 50 MB in
+one message, so without a [local Bot API server](configuration.md#large-files) those are lower still.
 
 A home is a fixed-size disk: when it fills, commands fail with `No space left on device`, and the fix
 is to delete what is no longer needed.

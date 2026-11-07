@@ -28,11 +28,14 @@ private class FakeSandbox(
     private val content: ByteArray = "hello there".encodeToByteArray(),
     private val existing: List<String> = emptyList(),
     private val refused: String? = null,
+    private val fileLimit: Int = 50 * 1024 * 1024,
 ) : ShelfSandbox {
 
     val reads = mutableListOf<String>()
     val written = mutableListOf<String>()
     val deleted = mutableListOf<String>()
+
+    override suspend fun fileLimitBytes(): Int = fileLimit
 
     override suspend fun read(path: String, maxBytes: Int): ByteArray {
         if (content.size > maxBytes) throw ShelfSandbox.FileTooLarge(path, maxBytes)
@@ -195,7 +198,7 @@ class TurnShelfTest {
 
         val message = assertFailsWith<IllegalArgumentException> { call.textOrNull("sandbox:build/app.jar") }.message.orEmpty()
 
-        assertContains(message, "1 MB")
+        assertContains(message, "1.0 MB")
         assertContains(message, "cannot stand in for text")
         assertTrue(sandbox.reads.isEmpty())
         assertEquals(2 * 1024 * 1024, call.file("sandbox:build/app.jar").loadBytes().size)
