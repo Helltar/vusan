@@ -12,7 +12,6 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileDownloadResult
-import com.helltar.vusan.tools.files.MAX_DOWNLOAD_BYTES
 import com.helltar.vusan.tools.keepOnShelf
 import com.helltar.vusan.tools.keptNotSent
 import com.helltar.vusan.tools.requireToolText
@@ -37,7 +36,7 @@ class KlipyTools(
     private val sent = ConcurrentHashMap.newKeySet<String>()
 
     private val KlipyKind.maxBytes: Long
-        get() = if (this == KlipyKind.MEME) MAX_MEME_BYTES else MAX_DOWNLOAD_BYTES
+        get() = if (this == KlipyKind.MEME) MAX_MEME_BYTES else downloads.maxBytes
 
     @Tool(KlipyToolDescriptions.SEARCH_GIFS, readOnly = true)
     suspend fun searchGifs(

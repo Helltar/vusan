@@ -20,7 +20,7 @@ internal object FileToolDescriptions {
         "Downloads whatever is at an `http`/`https` URL and sends it to the user as a document. " +
                 "Use when the user asks to download, save, or fetch a link, for example a PDF, an archive, a document, an image, or a whole web page saved as a file. " +
                 "Images arrive as uncompressed documents, not as photos. " +
-                "Uploads are capped at $MAX_DOWNLOAD_MB MB by the chat; a larger file is reported back to you instead of being sent. " +
+                "The chat caps what a bot may upload; a larger file is reported back to you, with the limit, instead of being sent. " +
                 "Call this only when the user wants the file itself in the chat; to read a page so you can answer or summarize it, use `extractPageContent` instead, or `readPage` when that one is not offered. " +
                 "Use the YouTube tools for YouTube links. " +
                 "After calling this tool, write a short natural comment for the user; the document will be sent automatically."

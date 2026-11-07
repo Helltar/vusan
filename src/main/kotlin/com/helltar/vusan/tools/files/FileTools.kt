@@ -66,9 +66,10 @@ class FileTools(
             }
 
             is FileDownloadResult.TooLarge -> {
-                val size = result.sizeBytes?.let { "is ${it.asFileSize()}" } ?: "is larger than $MAX_DOWNLOAD_MB MB"
+                val limit = downloads.maxBytes.asFileSize()
+                val size = result.sizeBytes?.let { "is ${it.asFileSize()}" } ?: "is larger than $limit"
 
-                "The file at $target $size, above the chat's $MAX_DOWNLOAD_MB MB upload limit for bots. " +
+                "The file at $target $size, above the chat's $limit upload limit for bots. " +
                         "Tell the user it is too large to send and give them the direct link instead."
             }
         }

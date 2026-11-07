@@ -460,6 +460,46 @@ The default is enough to build and fix a project in the sandbox or research a qu
 sources. Reaching it ends the turn with a wrap-up of what was done. Lower it only to keep a cheap
 model from wandering; the minimum is three.
 
+## Large files
+
+Telegram's own Bot API lets a bot send files up to 50 MB and fetch the ones people send up to 20 MB.
+Past that, a video arrives as its preview frame alone, and a download or a YouTube clip is refused.
+A [local Bot API server](https://github.com/tdlib/telegram-bot-api) lifts both; Vusan then moves files
+up to 100 MB either way, the most it holds in memory at once.
+
+| Variable               | Default          | Description                                                     |
+|------------------------|------------------|-----------------------------------------------------------------|
+| `TELEGRAM_BOT_API_URL` | Telegram's own   | A local server, such as `http://telegram-bot-api:8081`.         |
+
+Without it nothing changes, and nothing else needs setting up. With it:
+
+- **Run the server in local mode** — `telegram-bot-api --local`, with an `api_id` and `api_hash` from
+  [my.telegram.org](https://my.telegram.org/apps). It serves any number of bots, each by its own token.
+- **Log the bot out of Telegram's server once** — open
+  `https://api.telegram.org/bot<token>/logOut` before the first start against the local one, or Telegram
+  keeps the bot's updates to itself. Going back to Telegram's server is possible only ten minutes later.
+- **Mount the server's working directory read-only, at the same path** — a local server keeps the files
+  people send on its own disk and tells the bot where they are, so the bot reads them from there. In
+  Docker, a `compose.override.yaml` beside `compose.yaml` adds the mount and the server's network:
+
+  ```yaml
+  services:
+    vusan:
+      volumes:
+        - /srv/telegram-bot-api:/var/lib/telegram-bot-api:ro
+      networks:
+        - default
+        - botapi
+
+  networks:
+    botapi:
+      external: true
+  ```
+
+- **Clear the server's files now and then** — it never deletes what it fetched for a bot. Removing the
+  files older than an hour under its working directory, outside the top level of each bot's directory,
+  where it keeps its own state, is enough.
+
 ## Storage and binaries
 
 | Variable              | Default            | Description                                       |

@@ -277,7 +277,7 @@ class SandboxToolsTest {
     fun `an oversized attachment is named while the others still arrive`() = runBlocking {
         val album = listOf(
             AttachedFile(
-                name = "huge.bin", fileSizeBytes = 21L * 1024 * 1024, mimeType = null, kind = AttachedFileKind.OTHER,
+                name = "huge.bin", fileSizeBytes = 51L * 1024 * 1024, mimeType = null, kind = AttachedFileKind.OTHER,
                 loadBytes = { error("An oversized attachment must not be downloaded") },
             ),
             AttachedFile(
@@ -286,7 +286,7 @@ class SandboxToolsTest {
             ),
         )
         val result = tools(attached = album).runCommand("ls turns")
-        assertContains(result, "`huge.bin` is over the 20 MB an attachment may bring in")
+        assertContains(result, "`huge.bin` is over the 50 MB an attachment may bring in")
         assertTrue(writes.single().first.endsWith("/00-2-small.txt"))
         assertContains(result, writes.single().first)
     }

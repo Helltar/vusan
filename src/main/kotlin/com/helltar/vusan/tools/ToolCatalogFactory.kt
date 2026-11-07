@@ -122,7 +122,7 @@ class ToolCatalogFactory(
             GroupLogReader(log, remembered, chatReadBudgetChars)
         }
 
-    private val fileDownloadClient = FileDownloadClient(publicHttp)
+    private val fileDownloadClient = FileDownloadClient(publicHttp, config.platformLimits.uploadBytes)
     private val pageReader = PageReader(fileDownloadClient)
     private val imageDownloadClient = ImageDownloadClient(fileDownloadClient)
     private val elevenLabsTts = config.elevenLabsTts
@@ -131,7 +131,7 @@ class ToolCatalogFactory(
     private val imageVisionClient = vision?.let { ImageVisionClient(it.client, it.model, it.options) }
     private val telegramChannelClient = TelegramChannelClient(fileDownloadClient)
     private val ytDlpRunner = YtDlpRunner(config.ytDlpCookiesFile)
-    private val ytDlpClient = YtDlpClient(ytDlpRunner)
+    private val ytDlpClient = YtDlpClient(ytDlpRunner, config.platformLimits.uploadMb)
     private val youTubeTranscript = YouTubeTranscriptTools(YouTubeTranscriptClient(ytDlpRunner))
 
     private val telegramChannel =
@@ -296,7 +296,7 @@ class ToolCatalogFactory(
             diary?.let { tools(DiaryTools(it, context, chatReadBudgetChars)) }
 
             if (imageVisionClient != null && videoVisionClient != null) {
-                tools(VisionTools(imageVisionClient, videoVisionClient, context.attachedFile))
+                tools(VisionTools(imageVisionClient, videoVisionClient, context.attachedFile, config.platformLimits.downloadBytes))
             }
 
             whisper?.let { tools(SpeechTools(it, context.attachedFile, videoSampler)) }

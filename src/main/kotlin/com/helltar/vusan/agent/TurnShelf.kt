@@ -1,7 +1,6 @@
 package com.helltar.vusan.agent
 
 import com.helltar.vusan.common.asFileSize
-import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.common.mimeTypeOfName
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sanitizeFilename
@@ -323,10 +322,6 @@ class TurnShelf(
         // the current turn and the two before it
         const val KEPT_TURNS = 3
 
-        // an attachment is never larger than the platform serves
-        const val MAX_ATTACHMENT_MB = PlatformLimits.DOWNLOAD_MB
-        const val MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024
-
         val RESULT = Regex("""#(\d+)""")
         val FILE = Regex("""#(\d+)/(\d+)""")
         const val REFERENCE_PREVIEW_CHARS = 80
@@ -335,6 +330,11 @@ class TurnShelf(
         const val MAX_KEPT_BYTES = 200L * 1024 * 1024
         const val MAX_FILE_BYTES = 50 * 1024 * 1024
         const val MAX_TEXT_BYTES = 1024 * 1024
+
+        // an attachment is copied into the sandbox, so it is held to what a file there may be: telegram's own
+        // server serves less than that, but a local one serves a file of any size
+        const val MAX_ATTACHMENT_BYTES = MAX_FILE_BYTES
+        const val MAX_ATTACHMENT_MB = MAX_ATTACHMENT_BYTES / (1024 * 1024)
     }
 }
 

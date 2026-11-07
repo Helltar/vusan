@@ -16,11 +16,6 @@ import java.net.InetAddress
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-/** A larger download could never be delivered, so it is not finished. */
-internal const val MAX_DOWNLOAD_MB = PlatformLimits.UPLOAD_MB
-
-internal const val MAX_DOWNLOAD_BYTES = MAX_DOWNLOAD_MB * 1024L * 1024
-
 private const val MAX_REDIRECTS = 5
 private const val READ_CHUNK_BYTES = 64 * 1024
 private const val INITIAL_BUFFER_BYTES = 64 * 1024
@@ -51,7 +46,11 @@ sealed class FileDownloadResult {
 }
 
 /** Uses the public-only connection engine supplied at startup, never the internal-service client. */
-class FileDownloadClient(http: HttpClient) {
+class FileDownloadClient(
+    http: HttpClient,
+    /** The most the chat takes in one upload: a larger download could never be delivered, so it is not finished. */
+    val maxBytes: Long = PlatformLimits.TELEGRAM.uploadBytes,
+) {
 
     // redirects are followed by hand so every hop is checked against the local-address guard; a public URL
     // 302ing to 127.0.0.1 or 169.254.169.254 would otherwise walk past it. statuses are checked here too, so
@@ -65,9 +64,9 @@ class FileDownloadClient(http: HttpClient) {
     suspend fun download(
         url: String,
         requestedFilename: String = "",
-        maxBytes: Long = MAX_DOWNLOAD_BYTES,
+        maxBytes: Long = this.maxBytes,
     ): FileDownloadResult {
-        require(maxBytes in 1..MAX_DOWNLOAD_BYTES) { "Invalid download size limit" }
+        require(maxBytes in 1..this.maxBytes) { "Invalid download size limit" }
         var target = parseDownloadUrl(url)
 
         repeat(MAX_REDIRECTS + 1) {

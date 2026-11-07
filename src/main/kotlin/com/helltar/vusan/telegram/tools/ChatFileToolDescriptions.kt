@@ -6,7 +6,7 @@ internal object ChatFileToolDescriptions {
         "Sends a file that is already in this chat back into it as a Telegram document, named by the `file_id` from the message metadata. " +
                 "Use when the user asks to download, save, or get the file behind a sticker, photo, GIF, video, voice message, audio track, or document, for example `download this sticker` in a reply to one. " +
                 "The stored bytes are sent unchanged, so a sticker arrives as `.webp` (`.tgs` or `.webm` when it is animated) and a photo as the `.jpg` Telegram kept. " +
-                "Telegram serves bots files of at most $MAX_TELEGRAM_FILE_MB MB; a larger one is reported back to you instead of being sent. " +
+                "Telegram caps the size of a file it serves a bot; a larger one is reported back to you, with the limit, instead of being sent. " +
                 "Use `downloadFile` for an `http` or `https` link, and `sendFile` for text you wrote yourself. " +
                 "After calling this tool, write a short natural comment for the user; the document will be sent automatically."
 

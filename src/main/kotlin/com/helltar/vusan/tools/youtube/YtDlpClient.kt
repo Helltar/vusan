@@ -12,33 +12,44 @@ import java.nio.file.Path
 import javax.imageio.ImageIO
 import kotlin.math.roundToInt
 
-class YtDlpClient(private val runner: YtDlpRunner) {
+class YtDlpClient(
+    private val runner: YtDlpRunner,
+    // the most the chat takes in one message: nothing larger is downloaded, since it could never be sent
+    uploadMb: Int = PlatformLimits.TELEGRAM.uploadMb,
+) {
 
     private data class DownloadAttempt<out T>(val result: YtDlpResult<T>, val retryable: Boolean = false)
 
-    suspend fun downloadTrack(query: String, maxFileSizeMb: Int = AUDIO_MAX_FILE_SIZE_MB): YtDlpResult<YtDlpTrack> =
+    val videoMaxFileSizeMb = uploadMb
+
+    // yt-dlp sizes a track before the container is written, so leave headroom under the cap
+    val audioMaxFileSizeMb = uploadMb - AUDIO_HEADROOM_MB
+
+    init {
+        require(audioMaxFileSizeMb > 0) { "uploadMb must leave room for a track" }
+    }
+
+    suspend fun downloadTrack(query: String): YtDlpResult<YtDlpTrack> =
         withContext(Dispatchers.IO) {
             require(query.isNotBlank()) { "Query must not be blank" }
-            require(maxFileSizeMb in 1..50) { "maxFileSizeMb must be between 1 and 50" }
 
             val workDir = Files.createTempDirectory("ytdlp-audio-")
 
             try {
-                runAudioDownload(workDir, query, maxFileSizeMb)
+                runAudioDownload(workDir, query, audioMaxFileSizeMb)
             } finally {
                 workDir.toFile().deleteRecursively()
             }
         }
 
-    suspend fun downloadVideo(query: String, maxFileSizeMb: Int = VIDEO_MAX_FILE_SIZE_MB): YtDlpResult<YtDlpVideo> =
+    suspend fun downloadVideo(query: String): YtDlpResult<YtDlpVideo> =
         withContext(Dispatchers.IO) {
             require(query.isNotBlank()) { "Query must not be blank" }
-            require(maxFileSizeMb in 1..50) { "maxFileSizeMb must be between 1 and 50" }
 
             val workDir = Files.createTempDirectory("ytdlp-video-")
 
             try {
-                runVideoDownload(workDir, query, maxFileSizeMb)
+                runVideoDownload(workDir, query, videoMaxFileSizeMb)
             } finally {
                 workDir.toFile().deleteRecursively()
             }
@@ -402,10 +413,7 @@ class YtDlpClient(private val runner: YtDlpRunner) {
 
     companion object {
         private const val FORMAT_UNAVAILABLE_MARKER = "Requested format is not available"
-        const val VIDEO_MAX_FILE_SIZE_MB = PlatformLimits.UPLOAD_MB
-
-        // yt-dlp sizes a track before the container is written, so leave headroom under the cap
-        const val AUDIO_MAX_FILE_SIZE_MB = PlatformLimits.UPLOAD_MB - 5
+        private const val AUDIO_HEADROOM_MB = 5
         private val VIDEO_HEIGHT_CAPS = listOf(720, 480, 360)
 
         // --print-json implies --quiet, which hides the max-filesize rejection runMediaDownload reads for

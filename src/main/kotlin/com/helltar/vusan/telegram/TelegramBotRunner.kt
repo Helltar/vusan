@@ -100,6 +100,8 @@ internal class TelegramBotRunner(
     private val ambient: AmbientAddressing? = null,
     private val sandbox: Boolean = false,
     private val floor: ChatFloor = ChatFloor(),
+    // where the bot api is served: telegram's own server, or a local one the bot was moved to
+    private val telegramUrl: TelegramUrl = TelegramUrl.DEFAULT_URL,
 ) {
 
     private val heartbeat = Heartbeat()
@@ -158,7 +160,7 @@ internal class TelegramBotRunner(
                 runCatching {
                     longPolling.registerBot(
                         botToken,
-                        { TelegramUrl.DEFAULT_URL },
+                        { telegramUrl },
                         heartbeat.beatOn(DefaultGetUpdatesGenerator()),
                     ) { batch ->
                         // blocking on purpose: the batch must be on disk before returning, because returning

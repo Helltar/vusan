@@ -58,8 +58,11 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import okhttp3.OkHttpClient
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient
+import org.telegram.telegrambots.meta.TelegramUrl
+import java.net.URI
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
@@ -71,6 +74,9 @@ private const val MAINTENANCE_BATCH = 100
 // okhttp's ten-second default is shorter than telegram takes to process an uploaded video, and a timeout
 // after the upload says nothing about whether the message arrived, which it usually has.
 private val TELEGRAM_IO_TIMEOUT = 60.seconds
+private val LOCAL_BOT_API_IO_TIMEOUT = 5.minutes
+private const val HTTP_PORT = 80
+private const val HTTPS_PORT = 443
 
 suspend fun main() = coroutineScope {
     log.info { "Starting Vusan ${appVersion()}" }
@@ -136,13 +142,18 @@ suspend fun main() = coroutineScope {
         // a separate vision model brings a second client to close; otherwise vision rides on the chat one
         visionClient = vision?.takeIf { it.ownClient }?.client
 
+        // a local bot api server answers an upload only once it has passed the file on to telegram, which for
+        // a file past the cloud's limits takes longer than telegram's own server ever does
+        val telegramUrl = config.telegramBotApiUrl?.let(::telegramUrl) ?: TelegramUrl.DEFAULT_URL
+        val telegramTimeout = if (config.telegramBotApiUrl != null) LOCAL_BOT_API_IO_TIMEOUT else TELEGRAM_IO_TIMEOUT
         val telegramClient =
             OkHttpTelegramClient(
                 OkHttpClient.Builder()
-                    .writeTimeout(TELEGRAM_IO_TIMEOUT)
-                    .readTimeout(TELEGRAM_IO_TIMEOUT)
+                    .writeTimeout(telegramTimeout)
+                    .readTimeout(telegramTimeout)
                     .build(),
                 config.telegramBotToken,
+                telegramUrl,
             )
 
         // read once: the runner matches mentions against it, and the agent is told its own handles.
@@ -209,7 +220,7 @@ suspend fun main() = coroutineScope {
 
         val toolCatalogFactory =
             ToolCatalogFactory(
-                http, publicHttp, TelegramToolSets(telegramClient, delivery, chatProfiles, stickerCatalog), config,
+                http, publicHttp, TelegramToolSets(telegramClient, delivery, chatProfiles, stickerCatalog, config.platformLimits), config,
                 conversation, memory, tasks, leaveAlone, vision, groupLog, diaryRepository,
                 contextWindowPolicy.liveToolResultMaxChars, codexAuth, selfImage,
             )
@@ -280,6 +291,7 @@ suspend fun main() = coroutineScope {
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
                 chatProfiles, config.accessPolicy, voiceTranscriber, botProfile, stickerCatalog,
                 groupLog, polls, fallbackInUse, ambient, sandbox = config.regolithUrl != null, floor = floor,
+                telegramUrl = telegramUrl,
             )
 
         // retention runs on its own clock, since what most needs clearing is what nobody writes to. the steps
@@ -336,6 +348,14 @@ suspend fun main() = coroutineScope {
 }
 
 // stamped into the jar manifest at build time; a classpath run (`./gradlew run`) has none and says so.
+// AppConfig has already checked it is an http(s) url with a host
+private fun telegramUrl(raw: String): TelegramUrl {
+    val uri = URI(raw)
+    val port = uri.port.takeIf { it != -1 } ?: if (uri.scheme == "https") HTTPS_PORT else HTTP_PORT
+
+    return TelegramUrl(uri.scheme, uri.host, port, false)
+}
+
 private fun appVersion(): String = AppConfig::class.java.`package`?.implementationVersion ?: "dev"
 
 private fun createVoiceTranscriber(http: HttpClient, config: AppConfig): VoiceTranscriber? =
@@ -368,6 +388,12 @@ private fun logStartup(
     contextWindowTokens: Long,
 ) {
     log.info { "Owner: id=[${config.accessPolicy.owner}] allowed=[${config.accessPolicy.allowed.size}] banned=[${config.accessPolicy.banned.size}]" }
+
+    log.info {
+        val limits = "upload=[${config.platformLimits.uploadMb} MB] download=[${config.platformLimits.downloadMb} MB]"
+        config.telegramBotApiUrl?.let { "Bot API: local server url=[$it] $limits" }
+            ?: "Bot API: telegram's own (TELEGRAM_BOT_API_URL not set) $limits"
+    }
 
     when {
         config.personality != null -> log.info { "Personality: file=[${config.personalityFile}] chars=[${config.personality.length}]" }

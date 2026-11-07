@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram.delivery
 
+import com.helltar.vusan.telegram.LocalFileTooBigException
 import java.io.IOException
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import kotlin.time.Duration
@@ -70,9 +71,10 @@ internal fun Throwable.isWrongFileIdentifier(): Boolean {
         "invalid file_id" in description
 }
 
-// getFile refuses a file over the 20 MB bot download limit.
+// a file past what the bot may fetch: telegram's getFile refuses one over its 20 MB, and with a local server
+// the bot refuses one over its own limit before reading it.
 internal fun Throwable.isFileTooBig(): Boolean =
-    telegramDescription?.contains("file is too big", ignoreCase = true) == true
+    this is LocalFileTooBigException || telegramDescription?.contains("file is too big", ignoreCase = true) == true
 
 // a set its owner deleted or renamed, in the raw core error or the readable wording. only these mean gone;
 // anything else is transient and must not drop what was learned.

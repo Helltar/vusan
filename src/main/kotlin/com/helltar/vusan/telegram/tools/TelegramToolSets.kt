@@ -2,6 +2,7 @@ package com.helltar.vusan.telegram.tools
 
 import com.helltar.vusan.delivery.OutputDelivery
 import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.telegram.ChatProfiles
 import com.helltar.vusan.telegram.tools.chat.ChatPhotoTools
@@ -24,6 +25,7 @@ class TelegramToolSets(
     private val delivery: OutputDelivery,
     private val profiles: ChatProfiles,
     private val stickers: StickerCatalog? = null,
+    private val limits: PlatformLimits = PlatformLimits.TELEGRAM,
 ) : PlatformToolSets {
 
     override fun of(context: RequestContext, outbox: BotOutbox): List<PlatformToolSet> {
@@ -32,7 +34,7 @@ class TelegramToolSets(
         return buildList {
             // whatever the chat accepts: `send=false` fetches a file for another tool, and a send into a chat
             // refusing documents is answered before anything is fetched
-            add(PlatformToolSet(ChatFileTools(client, outbox)))
+            add(PlatformToolSet(ChatFileTools(client, outbox, limits)))
             if (chat.stickersAndAnimations) stickers?.let { add(PlatformToolSet(StickerTools(it, context, outbox))) }
             if (!context.chat.isPrivate) add(PlatformToolSet(ChatPhotoTools(client, context, outbox), ToolGroup.CHAT_PHOTO))
             if (chat.chatInfo) add(PlatformToolSet(ChatSettingsTools(client, profiles, context), ToolGroup.CHAT_SETTINGS))

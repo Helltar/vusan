@@ -2,12 +2,18 @@ package com.helltar.vusan.telegram
 
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.telegram.delivery.isTelegramUnavailable
+import com.helltar.vusan.request.PlatformLimits
 import io.github.oshai.kotlinlogging.KotlinLogging
+import java.io.IOException
 import java.util.concurrent.CompletableFuture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runInterruptible
+import java.nio.file.Path
+import kotlin.io.path.Path
+import kotlin.io.path.fileSize
+import kotlin.io.path.readBytes
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import org.telegram.telegrambots.meta.api.methods.GetFile
@@ -57,14 +63,39 @@ internal suspend fun <T> waitingOutTelegram(
  */
 internal class TelegramFile(val bytes: ByteArray, val path: String?)
 
+/**
+ * A file a local Bot API server holds that is past what the bot reads in. Telegram's own server refuses such a
+ * file in `getFile` already; a local one serves any size, so the bot holds the line itself.
+ */
+internal class LocalFileTooBigException(path: String, sizeBytes: Long) :
+    IOException("file is too big: [$path] is $sizeBytes bytes")
+
 // reading the stream is blocking io, so it runs on IO; runInterruptible frees the thread on cancellation (the
 // http call is not aborted). named for its id argument: the client's member `downloadFile` takes a server
 // path and would win over a same-named extension.
+//
+// a local bot api server answers getFile with the absolute path of the file on its own disk and serves no
+// download, so the file is read from there: the bot mounts the server's directory at the same path. telegram's
+// own server answers with a relative path, which is downloaded as before.
 internal suspend fun TelegramClient.downloadFileById(fileId: String): TelegramFile {
     val file = api { executeAsync(GetFile.builder().fileId(fileId).build()) }
-    val bytes = runInterruptible(Dispatchers.IO) { downloadFileAsStream(file).use { it.readBytes() } }
+    val localPath = file.filePath?.takeIf { it.startsWith('/') }?.let(::Path)
+
+    val bytes =
+        runInterruptible(Dispatchers.IO) {
+            if (localPath != null) readLocalFile(localPath)
+            else downloadFileAsStream(file).use { it.readBytes() }
+        }
 
     return TelegramFile(bytes, file.filePath)
+}
+
+private fun readLocalFile(path: Path): ByteArray {
+    val size = path.fileSize()
+
+    if (size > PlatformLimits.TELEGRAM_LOCAL_SERVER.downloadBytes) throw LocalFileTooBigException(path.toString(), size)
+
+    return path.readBytes()
 }
 
 internal suspend fun TelegramClient.downloadFileBytes(fileId: String): ByteArray = downloadFileById(fileId).bytes

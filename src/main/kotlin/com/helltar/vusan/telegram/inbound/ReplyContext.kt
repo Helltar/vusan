@@ -161,8 +161,9 @@ private fun videoAttachedFile(
         kind = AttachedFileKind.VIDEO,
         caption = caption,
         durationSeconds = durationSeconds,
-        // telegram serves bots at most 20 MB; the thumbnail is the one frame of an oversize video that still
-        // fits, so vision keeps a way in.
+        // telegram's own server serves bots at most 20 MB, and the bot reads in no more than its own limit from
+        // a local one; the thumbnail is the one frame of an oversize video that still fits, so vision keeps a
+        // way in.
         loadThumbnailBytes = thumbnailFileId?.let { id -> suspend { client.downloadFileBytes(id) } },
         isAnimation = isAnimation,
         loadBytes = { client.downloadFileBytes(fileId) },

@@ -3,6 +3,7 @@ package com.helltar.vusan.config
 import com.helltar.vusan.config.llm.AddressingConfig
 import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.PlatformLimits
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -140,9 +141,23 @@ class AppConfigTest {
         assertFailsWith<IllegalArgumentException> { config(regolithUrl = "http://regolith:8080") }
     }
 
+    @Test
+    fun `a local bot api server raises what a file may weigh`() {
+        assertEquals(PlatformLimits.TELEGRAM, config().platformLimits)
+        assertEquals(PlatformLimits.TELEGRAM_LOCAL_SERVER, config(telegramBotApiUrl = "http://telegram-bot-api:8081").platformLimits)
+    }
+
+    @Test
+    fun `a bot api url that is not an http url with a host stops the startup`() {
+        assertFailsWith<IllegalArgumentException> { config(telegramBotApiUrl = "telegram-bot-api:8081") }
+        assertFailsWith<IllegalArgumentException> { config(telegramBotApiUrl = "ftp://telegram-bot-api") }
+        config(telegramBotApiUrl = "https://bot-api.example.com")
+    }
+
     private fun config(
         agentMaxModelCalls: Int = 70,
         regolithUrl: String? = null,
+        telegramBotApiUrl: String? = null,
         addressing: AddressingConfig? = null,
         groupLog: GroupLogConfig = GroupLogConfig(),
     ): AppConfig =
@@ -173,6 +188,7 @@ class AppConfigTest {
             selfImageFile = null,
             tavilyApiKey = null,
             telegramBotToken = "token",
+            telegramBotApiUrl = telegramBotApiUrl,
             ytDlpCookiesFile = null,
         )
 }

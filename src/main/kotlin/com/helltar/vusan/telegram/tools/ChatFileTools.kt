@@ -24,9 +24,6 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 private const val MAX_FILE_ID_CHARS = 200
 private const val DEFAULT_CHAT_FILE_NAME = "file"
 
-/** Telegram serves bots stored files only up to this size, whatever the chat could upload. */
-internal const val MAX_TELEGRAM_FILE_MB = PlatformLimits.DOWNLOAD_MB
-
 /**
  * Resends a file the platform already holds, by its id. A `file_id` names a file within one bot's view of one
  * chat, a concept no other messenger has, so this is apart from [FileTools], which works anywhere.
@@ -34,6 +31,8 @@ internal const val MAX_TELEGRAM_FILE_MB = PlatformLimits.DOWNLOAD_MB
 class ChatFileTools(
     private val telegram: TelegramClient,
     private val outbox: BotOutbox,
+    // telegram serves bots stored files only up to its download limit, whatever the chat could upload
+    private val limits: PlatformLimits = PlatformLimits.TELEGRAM,
 ) : ToolSet {
 
     @Tool(ChatFileToolDescriptions.SEND_CHAT_FILE)
@@ -57,7 +56,7 @@ class ChatFileTools(
 
                     return@suspendToolGuard when {
                         error.isFileTooBig() ->
-                            "Telegram serves bots files of at most $MAX_TELEGRAM_FILE_MB MB and this one is larger, " +
+                            "Telegram serves bots files of at most ${limits.downloadMb} MB and this one is larger, " +
                                     "so it cannot be fetched at all. Tell the user that."
 
                         error.isWrongFileIdentifier() ->

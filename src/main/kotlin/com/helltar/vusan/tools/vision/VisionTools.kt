@@ -1,5 +1,6 @@
 package com.helltar.vusan.tools.vision
 
+import com.helltar.vusan.common.asFileSize
 import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
@@ -14,6 +15,8 @@ class VisionTools(
     private val client: ImageVisionClient,
     private val videoClient: VideoVisionClient,
     private val attachedFile: AttachedFile?,
+    // the most the chat serves a bot: a bigger video cannot be fetched at all
+    private val maxVideoBytes: Long = PlatformLimits.TELEGRAM.downloadBytes,
 ) : ToolSet {
 
     @Tool(VisionToolDescriptions.DESCRIBE_IMAGE, readOnly = true, copiedToSandbox = true)
@@ -60,7 +63,7 @@ class VisionTools(
                 return@suspendToolGuard "`${video.name}` is not a video, so there is nothing to watch."
         }
 
-        val oversize = video.fileSizeBytes != null && video.fileSizeBytes > MAX_VIDEO_BYTES
+        val oversize = video.fileSizeBytes != null && video.fileSizeBytes > maxVideoBytes
 
         if (!oversize) {
             downloadOrNull(video, video.loadBytes)
@@ -73,7 +76,7 @@ class VisionTools(
             video.loadThumbnailBytes?.let { downloadOrNull(video, it) }
                 ?: error(
                     "The video `${video.name}` could not be downloaded " +
-                            "(the chat serves a bot files of at most ${MAX_VIDEO_BYTES / (1024 * 1024)} MB) " +
+                            "(the chat serves a bot files of at most ${maxVideoBytes.asFileSize()}) " +
                             "and its preview frame is not available either.",
                 )
 
@@ -91,9 +94,6 @@ class VisionTools(
 
     private companion object {
         const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
-
-        // a bigger video cannot be fetched at all
-        const val MAX_VIDEO_BYTES = PlatformLimits.DOWNLOAD_MB * 1024 * 1024
 
         val log = KotlinLogging.logger {}
     }

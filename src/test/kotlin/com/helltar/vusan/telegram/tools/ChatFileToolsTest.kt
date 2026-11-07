@@ -4,6 +4,7 @@ import com.helltar.vusan.agent.TurnShelf
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.ChatCapabilities
+import com.helltar.vusan.request.PlatformLimits
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.telegram.telegrambots.meta.api.methods.GetFile
@@ -12,9 +13,15 @@ import org.telegram.telegrambots.meta.api.objects.File
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
 import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.io.ByteArrayInputStream
+import java.io.RandomAccessFile
 import java.io.Serializable
 import java.lang.reflect.Proxy
 import java.util.concurrent.CompletableFuture
+import kotlin.io.path.createDirectories
+import kotlin.io.path.createTempDirectory
+import kotlin.io.path.createTempFile
+import kotlin.io.path.deleteExisting
+import kotlin.io.path.writeBytes
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -23,8 +30,11 @@ import kotlin.test.assertTrue
 
 class ChatFileToolsTest {
 
-    private fun tools(outbox: BotOutbox, telegram: TelegramClient = FakeTelegramFiles().proxy) =
-        ChatFileTools(telegram, outbox)
+    private fun tools(
+        outbox: BotOutbox,
+        telegram: TelegramClient = FakeTelegramFiles().proxy,
+        limits: PlatformLimits = PlatformLimits.TELEGRAM,
+    ) = ChatFileTools(telegram, outbox, limits)
 
     @Test
     fun `queues a telegram file as a document named by the served path`() = runBlocking {
@@ -39,6 +49,36 @@ class ChatFileToolsTest {
         assertContentEqualsBytes(payload, doc.bytes)
         assertContains(reply, "file_15.webp")
         assertContains(reply, "3 KB")
+    }
+
+    // a local bot api server answers getFile with a path on its own disk and serves no download: the fake
+    // fails any download, so the file can only have come off the disk
+    @Test
+    fun `reads a file a local bot api server names by its absolute path`() = runBlocking {
+        val payload = ByteArray(2048) { 7 }
+        val local = createTempDirectory().resolve("videos").createDirectories().resolve("file_3.mp4").apply { writeBytes(payload) }
+        val outbox = BotOutbox()
+        val tools = tools(outbox, FakeTelegramFiles(path = local.toString(), served = false).proxy, PlatformLimits.TELEGRAM_LOCAL_SERVER)
+
+        tools.sendChatFile(fileId = "BAACAgIAAxkBAAE")
+
+        val doc = assertIs<BotOutput.Document>(outbox.pending.single().output)
+        assertEquals("file_3.mp4", doc.filename)
+        assertContentEqualsBytes(payload, doc.bytes)
+    }
+
+    @Test
+    fun `refuses a local file past the bot's own limit before reading it`() = runBlocking {
+        val local = createTempFile(suffix = ".mp4")
+        RandomAccessFile(local.toFile(), "rw").use { it.setLength(PlatformLimits.TELEGRAM_LOCAL_SERVER.downloadBytes + 1) }
+        val outbox = BotOutbox()
+        val tools = tools(outbox, FakeTelegramFiles(path = local.toString(), served = false).proxy, PlatformLimits.TELEGRAM_LOCAL_SERVER)
+
+        val reply = tools.sendChatFile(fileId = "BAACAgIAAxkBAAE")
+
+        assertTrue(outbox.pending.isEmpty())
+        assertContains(reply, "at most 100 MB")
+        local.deleteExisting()
     }
 
     @Test
@@ -60,7 +100,7 @@ class ChatFileToolsTest {
         val reply = tools.sendChatFile(fileId = "BQACAgIAAxkBAAE")
 
         assertTrue(outbox.pending.isEmpty())
-        assertContains(reply, "$MAX_TELEGRAM_FILE_MB MB")
+        assertContains(reply, "at most 20 MB")
     }
 
     @Test
@@ -98,6 +138,8 @@ class ChatFileToolsTest {
         private val bytes: ByteArray = ByteArray(1024),
         private val path: String? = "stickers/file_15.webp",
         private val failure: String? = null,
+        // false for a local bot api server, which serves nothing over http
+        private val served: Boolean = true,
     ) {
 
         val proxy: TelegramClient =
@@ -107,7 +149,7 @@ class ChatFileToolsTest {
             ) { _, method, args ->
                 when (method.name) {
                     "executeAsync" -> respond(args.single() as GetFile)
-                    "downloadFileAsStream" -> ByteArrayInputStream(bytes)
+                    "downloadFileAsStream" -> if (served) ByteArrayInputStream(bytes) else error("a local server serves no download")
                     else -> error("unexpected client call: ${method.name}")
                 }
             } as TelegramClient

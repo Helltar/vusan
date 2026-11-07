@@ -72,7 +72,8 @@ Before it: [running a turn](turn.md).
       was lost, which is common for a video it is still processing. The fallbacks rethrow it rather than send the
       payload again in another shape, and `TelegramDelivery` treats the item as possibly arrived — no transcript row,
       and the caption that rode on it is not repeated as a message. The client waits `TELEGRAM_IO_TIMEOUT` (`Main.kt`)
-      for an answer instead of OkHttp's ten seconds, so this stays rare.
+      for an answer instead of OkHttp's ten seconds, so this stays rare, and `LOCAL_BOT_API_IO_TIMEOUT` behind a local
+      Bot API server, which answers an upload only once it has passed the file on to Telegram.
     - **Gone targets and blocked DMs** — a reply whose target no longer exists is retried without the anchor
       (`DeliveryTarget.withoutReply`); a private chat the bot cannot write to produces a notice in the group instead.
     - **Unreachable chats** — a chat that refuses the bot rather than the payload (kicked, left, blocked, deleted, write

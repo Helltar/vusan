@@ -7,11 +7,13 @@ import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.Platform
+import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.llm.codex.CODEX_VERSION
 import com.helltar.vusan.llm.codex.defaultCodexAuthFile
 import io.github.cdimascio.dotenv.dotenv
 import io.github.oshai.kotlinlogging.KotlinLogging
+import java.net.URI
 import kotlin.io.path.Path
 import kotlin.io.path.isReadable
 import kotlin.io.path.readText
@@ -49,13 +51,22 @@ data class AppConfig(
     val stickersEnabled: Boolean = true,
     val tavilyApiKey: String?,
     val telegramBotToken: String,
+    // a local bot api server to talk to instead of telegram's own, e.g. `http://telegram-bot-api:8081`
+    val telegramBotApiUrl: String? = null,
     val ytDlpCookiesFile: String?,
 ) {
+
+    /** What a file may weigh either way, which a local Bot API server raises. */
+    val platformLimits: PlatformLimits
+        get() = if (telegramBotApiUrl != null) PlatformLimits.TELEGRAM_LOCAL_SERVER else PlatformLimits.TELEGRAM
 
     init {
         require(agentMaxModelCalls >= MIN_MODEL_CALLS) { "AGENT_MAX_MODEL_CALLS must be at least $MIN_MODEL_CALLS" }
         require(maxConcurrentTurns > 0) { "MAX_CONCURRENT_TURNS must be positive" }
         require(regolithUrl == null || !regolithToken.isNullOrBlank()) { "Sandbox API authentication is required" }
+        require(telegramBotApiUrl == null || isServerUrl(telegramBotApiUrl)) {
+            "TELEGRAM_BOT_API_URL must be an http or https URL with a host, such as http://telegram-bot-api:8081"
+        }
         // the classifier reads the surrounding lines and the bot's recent ones from the transcript
         require(addressing == null || groupLog.enabled) { "ADDRESSING_ENABLED needs the group log, which GROUP_LOG_ENABLED=false turns off" }
     }
@@ -119,6 +130,7 @@ data class AppConfig(
                 stickersEnabled = readBooleanEnv("STICKERS_ENABLED") ?: true,
                 tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
+                telegramBotApiUrl = readEnv("TELEGRAM_BOT_API_URL"),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
 
                 chatHistory =
@@ -487,3 +499,8 @@ private fun parsePolicyId(env: String, entry: String): String {
 
     return UserRef(known, id).key
 }
+
+private fun isServerUrl(raw: String): Boolean =
+    runCatching { URI(raw) }.getOrNull()
+        ?.let { it.scheme in setOf("http", "https") && !it.host.isNullOrBlank() }
+        ?: false
