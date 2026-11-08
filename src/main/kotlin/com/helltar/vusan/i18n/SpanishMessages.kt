@@ -30,7 +30,7 @@ internal object SpanishMessages : Messages {
 
     override val nothingToStopReply = "Ahora mismo no hago nada, no hay nada que detener"
 
-    override val turnStopButton = "⏹ Detener"
+    override val turnStopButton = "Detener"
 
     override val turnStopNotOwnerAlert = "Esta petición es de otra persona."
 
@@ -53,11 +53,11 @@ internal object SpanishMessages : Messages {
 
     override val taskMenuErrorAlert = "No pude actualizar la tarea — inténtalo otra vez."
 
-    override val taskMenuRefreshButton = "🔄 Actualizar"
+    override val taskMenuRefreshButton = "Actualizar"
 
-    override val taskMenuBackButton = "↩️ Volver"
+    override val taskMenuBackButton = "Volver"
 
-    override val taskMenuDeleteButton = "🗑 Eliminar"
+    override val taskMenuDeleteButton = "Eliminar"
 
     override val tasksCommandDescription = "Gestionar tareas programadas"
     override val clearCommandDescription = "Borrar el historial de la conversación"
@@ -127,11 +127,11 @@ internal object SpanishMessages : Messages {
             append(if (paused) "⏸ En pausa" else "🟢 Activa")
         }
 
-    override fun taskMenuPauseButton(id: Long) = "⏸ Pausar #$id"
+    override fun taskMenuPauseButton(id: Long) = "Pausar #$id"
 
-    override fun taskMenuResumeButton(id: Long) = "▶️ Reanudar #$id"
+    override fun taskMenuResumeButton(id: Long) = "Reanudar #$id"
 
-    override fun taskMenuCancelButton(id: Long) = "🗑 Cancelar #$id"
+    override fun taskMenuCancelButton(id: Long) = "Cancelar #$id"
 
     override fun taskMenuDeleteConfirmation(id: Long, label: String): String =
         "<b>¿Eliminar la tarea #$id · $label?</b>\n\nEsto no se puede deshacer."

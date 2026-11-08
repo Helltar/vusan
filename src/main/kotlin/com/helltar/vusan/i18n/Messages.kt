@@ -16,6 +16,9 @@ interface Messages {
     val conversationClearedReply: String
     val turnStoppedNotice: String
     val nothingToStopReply: String
+
+    // a button's text is words alone, here and in the task menu: the icon before them is the same in every
+    // language, and the adapter draws it
     val turnStopButton: String
     val turnStopNotOwnerAlert: String
     val voiceEmptyReply: String

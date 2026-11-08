@@ -29,7 +29,7 @@ internal object UkrainianMessages : Messages {
 
     override val nothingToStopReply = "Зараз нічого не роблю, нема чого зупиняти"
 
-    override val turnStopButton = "⏹ Зупинити"
+    override val turnStopButton = "Зупинити"
 
     override val turnStopNotOwnerAlert = "Це запит іншого користувача."
 
@@ -52,11 +52,11 @@ internal object UkrainianMessages : Messages {
 
     override val taskMenuErrorAlert = "Не вдалося оновити завдання — спробуй ще раз."
 
-    override val taskMenuRefreshButton = "🔄 Оновити"
+    override val taskMenuRefreshButton = "Оновити"
 
-    override val taskMenuBackButton = "↩️ Назад"
+    override val taskMenuBackButton = "Назад"
 
-    override val taskMenuDeleteButton = "🗑 Видалити"
+    override val taskMenuDeleteButton = "Видалити"
 
     override val tasksCommandDescription = "Керувати запланованими завданнями"
     override val clearCommandDescription = "Очистити історію переписки"
@@ -126,11 +126,11 @@ internal object UkrainianMessages : Messages {
             append(if (paused) "⏸ На паузі" else "🟢 Активне")
         }
 
-    override fun taskMenuPauseButton(id: Long) = "⏸ Пауза #$id"
+    override fun taskMenuPauseButton(id: Long) = "Пауза #$id"
 
-    override fun taskMenuResumeButton(id: Long) = "▶️ Відновити #$id"
+    override fun taskMenuResumeButton(id: Long) = "Відновити #$id"
 
-    override fun taskMenuCancelButton(id: Long) = "🗑 Скасувати #$id"
+    override fun taskMenuCancelButton(id: Long) = "Скасувати #$id"
 
     override fun taskMenuDeleteConfirmation(id: Long, label: String): String =
         "<b>Видалити завдання #$id · $label?</b>\n\nЦю дію не можна скасувати."

@@ -37,6 +37,7 @@ import com.helltar.vusan.tasks.TaskScheduler
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.telegram.ChatProfiles
 import com.helltar.vusan.telegram.PollRegistry
+import com.helltar.vusan.telegram.InterfaceIcons
 import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.addressingNames
 import com.helltar.vusan.telegram.botProfile
@@ -264,7 +265,9 @@ suspend fun main() = coroutineScope {
             )
 
         val voiceTranscriber = createVoiceTranscriber(http, config)
-        val taskMenu = TaskMenuHandler(telegramClient, tasks, TasksRepository.MAX_TASKS_PER_USER)
+        // whether the bot may send custom emoji is learned from its first status and holds for every button
+        val interfaceIcons = InterfaceIcons()
+        val taskMenu = TaskMenuHandler(telegramClient, tasks, TasksRepository.MAX_TASKS_PER_USER, interfaceIcons)
         val inlineChoices = InlineChoiceHandler(telegramClient, conversation::revision)
 
         val scheduler =
@@ -292,6 +295,7 @@ suspend fun main() = coroutineScope {
                 chatProfiles, config.accessPolicy, voiceTranscriber, botProfile, stickerCatalog,
                 groupLog, polls, fallbackInUse, ambient, sandbox = config.regolithUrl != null, floor = floor,
                 telegramUrl = telegramUrl,
+                icons = interfaceIcons,
             )
 
         // retention runs on its own clock, since what most needs clearing is what nobody writes to. the steps

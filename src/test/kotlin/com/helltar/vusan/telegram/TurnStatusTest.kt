@@ -23,6 +23,9 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 
 class TurnStatusTest {
 
+    // until a status shows whether custom emoji go through, the running line ends in the animated sign
+    private val spinner = InterfaceIcons().working
+
     @Test
     fun `the running line sits under the plan and carries its own ellipsis`() {
         assertEquals(
@@ -104,10 +107,10 @@ class TurnStatusTest {
         assertEquals(
             listOf(
                 "send #1 [I will build the game] button=true",
-                "edit #1 [I will build the game\n\n💻 Running code…] button=true",
+                "edit #1 [I will build the game\n\n💻 Running code$spinner] button=true",
                 "send #2 [halfway there] button=false",
                 "edit #1 [I will build the game] button=false",
-                "send #3 [💻 Running code…] button=true",
+                "send #3 [💻 Running code$spinner] button=true",
                 "delete #3",
             ),
             calls,
@@ -130,7 +133,7 @@ class TurnStatusTest {
         assertEquals(
             listOf(
                 "send #1 [I will build the game] button=true",
-                "edit #1 [I will build the game\n\n💻 Running code…] button=true",
+                "edit #1 [I will build the game\n\n💻 Running code$spinner] button=true",
                 "send #2 [halfway there] button=false",
                 "edit #1 [I will build the game] button=false",
             ),

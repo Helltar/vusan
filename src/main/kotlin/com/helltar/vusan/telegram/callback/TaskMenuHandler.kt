@@ -17,13 +17,14 @@ import com.helltar.vusan.telegram.delivery.answerCallbackQuery
 import com.helltar.vusan.telegram.delivery.editTextMessage
 import com.helltar.vusan.telegram.delivery.isMessageNotModified
 import com.helltar.vusan.telegram.delivery.sendTextMessage
+import com.helltar.vusan.telegram.InterfaceIcons
+import com.helltar.vusan.telegram.InterfaceIcons.Icon
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
 import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessageParameters
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
@@ -31,6 +32,7 @@ internal class TaskMenuHandler(
     private val client: TelegramClient,
     private val tasks: TasksRepository,
     private val maxTasksPerUser: Int,
+    private val icons: InterfaceIcons = InterfaceIcons(),
     private val now: () -> Instant = Instant::now,
 ) {
 
@@ -203,11 +205,13 @@ internal class TaskMenuHandler(
                 .keyboard(
                     listOf(
                         InlineKeyboardRow(
-                            callbackButton(
+                            icons.button(
+                                Icon.DELETE,
                                 messages.taskMenuDeleteButton,
                                 TaskMenuAction.Delete(task.scope.user.telegramUserId, task.id).serialize(),
                             ),
-                            callbackButton(
+                            icons.button(
+                                Icon.BACK,
                                 messages.taskMenuBackButton,
                                 TaskMenuAction.Back(task.scope.user.telegramUserId).serialize(),
                             ),
@@ -263,7 +267,8 @@ internal class TaskMenuHandler(
         val rows: List<InlineKeyboardRow> =
             shownTasks.map { (task, _) ->
                 InlineKeyboardRow(
-                    callbackButton(
+                    icons.button(
+                        if (task.paused) Icon.RESUME else Icon.PAUSE,
                         if (task.paused)
                             messages.taskMenuResumeButton(task.id)
                         else
@@ -273,14 +278,16 @@ internal class TaskMenuHandler(
                         else
                             TaskMenuAction.Pause(userId, task.id).serialize(),
                     ),
-                    callbackButton(
+                    icons.button(
+                        Icon.DELETE,
                         messages.taskMenuCancelButton(task.id),
                         TaskMenuAction.ConfirmDelete(userId, task.id).serialize(),
                     ),
                 )
             } + listOf(
                 InlineKeyboardRow(
-                    callbackButton(
+                    icons.button(
+                        Icon.REFRESH,
                         messages.taskMenuRefreshButton,
                         TaskMenuAction.Refresh(userId).serialize(),
                     ),
@@ -353,12 +360,6 @@ internal class TaskMenuHandler(
             is Recurrence.Every -> messages.taskRecurrenceEvery(interval.toString().escapeHtml())
             is Recurrence.Cron -> messages.taskRecurrenceCron("<code>${expression.escapeHtml()}</code>")
         }
-
-    private fun callbackButton(text: String, data: String): InlineKeyboardButton =
-        InlineKeyboardButton.builder()
-            .text(text)
-            .callbackData(data)
-            .build()
 
     private data class MenuItem(
         val task: ScheduledTask,

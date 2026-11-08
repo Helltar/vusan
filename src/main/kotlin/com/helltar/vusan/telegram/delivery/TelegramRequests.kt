@@ -20,6 +20,7 @@ import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessagePara
 import org.telegram.telegrambots.meta.api.objects.media.InputMedia
 import org.telegram.telegrambots.meta.api.objects.reactions.ReactionTypeEmoji
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
+import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.richtext.InputRichMessage
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
@@ -97,6 +98,7 @@ internal suspend fun editTextMessage(
 }
 
 // a null [replyMarkup] removes the buttons rather than keeping them, which is what ends a live status bubble.
+// the edited message, as telegram answers for one the bot sent itself
 internal suspend fun editTextMessage(
     client: TelegramClient,
     chatId: Long,
@@ -104,7 +106,7 @@ internal suspend fun editTextMessage(
     text: String,
     replyMarkup: InlineKeyboardMarkup?,
     parseMode: String? = null,
-) {
+): Message? =
     client.api {
         executeAsync(
             EditMessageText.builder()
@@ -115,11 +117,10 @@ internal suspend fun editTextMessage(
                 .replyMarkup(replyMarkup)
                 .build(),
         )
-    }
-}
+    } as? Message
 
-// the live status bubble: silent because it is not news, and its id returned for every later edit and its
-// removal.
+// the live status bubble: silent because it is not news, and returned whole: its id serves every later edit
+// and its removal, and its entities say whether the custom emoji in it went through.
 internal suspend fun sendStatusMessage(
     client: TelegramClient,
     target: ChatTarget,
@@ -127,7 +128,7 @@ internal suspend fun sendStatusMessage(
     parseMode: String?,
     replyParameters: ReplyParameters?,
     replyMarkup: InlineKeyboardMarkup?,
-): Int =
+): Message =
     client.api {
         executeAsync(
             SendMessage.builder()
@@ -140,7 +141,7 @@ internal suspend fun sendStatusMessage(
                 .disableNotification(true)
                 .build(),
         )
-    }.messageId
+    }
 
 internal suspend fun deleteChatMessage(client: TelegramClient, chatId: Long, messageId: Int) {
     client.api {

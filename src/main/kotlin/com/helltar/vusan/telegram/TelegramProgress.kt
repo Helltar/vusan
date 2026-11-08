@@ -78,11 +78,12 @@ internal suspend fun <T> TelegramClient.withLiveProgress(
     fallbackInUse: () -> FallbackInUse? = { null },
     onPosted: suspend (text: String) -> Unit = {},
     acknowledge: Boolean = false,
+    icons: InterfaceIcons = InterfaceIcons(),
     block: suspend (setActivity: (ToolActivity?) -> Unit, status: TurnStatus) -> T,
 ): T =
     coroutineScope {
         val activity = MutableStateFlow<ToolActivity?>(null)
-        val status = statusFor(request, fallbackInUse, onPosted, acknowledge)
+        val status = statusFor(request, fallbackInUse, onPosted, acknowledge, icons)
         status.acknowledge()
         val started = TimeSource.Monotonic.markNow()
 
@@ -143,6 +144,7 @@ private fun TelegramClient.statusFor(
     fallbackInUse: () -> FallbackInUse?,
     onPosted: suspend (text: String) -> Unit,
     acknowledge: Boolean,
+    icons: InterfaceIcons,
 ): TurnStatus =
     TurnStatus(
         client = this,
@@ -154,6 +156,7 @@ private fun TelegramClient.statusFor(
         acknowledges = acknowledge,
         fallbackInUse = fallbackInUse,
         onPosted = onPosted,
+        icons = icons,
     )
 
 private suspend fun TelegramClient.indicateChatAction(target: ChatTarget, action: ActionType) {

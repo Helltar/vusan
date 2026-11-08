@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram
 
+import com.helltar.vusan.telegram.InterfaceIcons.Icon
 import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.agent.TurnNarrator
@@ -24,17 +25,21 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
  * The status body: the announced plan, and under it the line naming what runs. The line is plain text (the
- * emoji sets it apart) with its own ellipsis, since nothing animates one in a sent message. The fallback note
- * brings its own markup, as the plan does.
+ * emoji sets it apart) ending in [working], an ellipsis or the animated sign of [InterfaceIcons]. The fallback
+ * note brings its own markup, as the plan does.
  */
-internal fun statusMessageText(plan: String?, label: String?, fallbackNote: String? = null): String? {
-    val running = listOfNotNull(label?.let { "$it…" }, fallbackNote).joinToString("\n").ifEmpty { null }
+internal fun statusMessageText(
+    plan: String?,
+    label: String?,
+    fallbackNote: String? = null,
+    working: String = InterfaceIcons.PLAIN_WORKING,
+): String? {
+    val running = listOfNotNull(label?.let { "$it$working" }, fallbackNote).joinToString("\n").ifEmpty { null }
 
     return when {
         plan == null -> running
@@ -104,6 +109,8 @@ internal class TurnStatus(
     private val fallbackInUse: () -> FallbackInUse? = { null },
     // the model's words, reported the moment they reach the chat.
     private val onPosted: suspend (text: String) -> Unit = {},
+    // the working sign and the stop button's icon, and what this status learns about them
+    private val icons: InterfaceIcons = InterfaceIcons(),
 ) : TurnNarrator {
 
     // written from two places, the narrating tool and the activity collector, each reading the state it
@@ -265,10 +272,10 @@ internal class TurnStatus(
 
                 when {
                     // broken HTML in the plan costs the formatting, not the status: the same text goes up as
-                    // plain text.
+                    // plain text, its working sign an ellipsis again.
                     error.isEntityParseError() -> {
                         parseMode = null
-                        push(text)
+                        push(statusText() ?: text)
                     }
 
                     // the anchor is gone, but the status still has something to say.
@@ -303,8 +310,14 @@ internal class TurnStatus(
             }
     }
 
+    // the animated sign is markup, so a status that dropped its markup keeps the ellipsis
     private fun statusText(): String? =
-        statusMessageText(announcement, label, fallbackInUse()?.let { messages.fallbackModelNote(it.model, it.primaryBackIn) })
+        statusMessageText(
+            announcement,
+            label,
+            fallbackInUse()?.let { messages.fallbackModelNote(it.model, it.primaryBackIn) },
+            working = if (parseMode == ParseMode.HTML) icons.working else InterfaceIcons.PLAIN_WORKING,
+        )
 
     // a write in flight when the turn ends must finish: `/stop` or the turn ending cancels the collector, and
     // a canceled send may still have created the message, leaving a bubble nothing takes down.
@@ -312,8 +325,8 @@ internal class TurnStatus(
         withContext(NonCancellable) {
             val id = messageId
 
-            if (id == null) {
-                messageId =
+            val sent =
+                if (id == null) {
                     sendStatusMessage(
                         client = client,
                         target = target,
@@ -321,17 +334,20 @@ internal class TurnStatus(
                         parseMode = parseMode,
                         replyParameters = replyParameters(anchor),
                         replyMarkup = stopKeyboard(),
+                    ).also { messageId = it.messageId }
+                } else {
+                    editTextMessage(
+                        client = client,
+                        chatId = target.chatId,
+                        messageId = id,
+                        text = text,
+                        replyMarkup = stopKeyboard(),
+                        parseMode = parseMode,
                     )
-            } else {
-                editTextMessage(
-                    client = client,
-                    chatId = target.chatId,
-                    messageId = id,
-                    text = text,
-                    replyMarkup = stopKeyboard(),
-                    parseMode = parseMode,
-                )
-            }
+                }
+
+            // the working sign went up as markup: what telegram kept of it says whether custom emoji go through
+            if (sent != null && parseMode == ParseMode.HTML && text.contains(icons.working)) icons.learnFrom(sent)
 
             text
         }
@@ -341,10 +357,7 @@ internal class TurnStatus(
             .keyboard(
                 listOf(
                     InlineKeyboardRow(
-                        InlineKeyboardButton.builder()
-                            .text(messages.turnStopButton)
-                            .callbackData(turnStopCallbackData(ownerId))
-                            .build(),
+                        icons.button(Icon.STOP, messages.turnStopButton, turnStopCallbackData(ownerId)),
                     ),
                 ),
             )

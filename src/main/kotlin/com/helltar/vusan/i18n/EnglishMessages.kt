@@ -28,7 +28,7 @@ internal object EnglishMessages : Messages {
 
     override val nothingToStopReply = "Not doing anything right now, nothing to stop"
 
-    override val turnStopButton = "⏹ Stop"
+    override val turnStopButton = "Stop"
 
     override val turnStopNotOwnerAlert = "This is someone else's request."
 
@@ -51,11 +51,11 @@ internal object EnglishMessages : Messages {
 
     override val taskMenuErrorAlert = "Couldn't update the task — try again."
 
-    override val taskMenuRefreshButton = "🔄 Refresh"
+    override val taskMenuRefreshButton = "Refresh"
 
-    override val taskMenuBackButton = "↩️ Back"
+    override val taskMenuBackButton = "Back"
 
-    override val taskMenuDeleteButton = "🗑 Delete"
+    override val taskMenuDeleteButton = "Delete"
 
     override val tasksCommandDescription = "Manage scheduled tasks"
     override val clearCommandDescription = "Clear conversation history"
@@ -125,11 +125,11 @@ internal object EnglishMessages : Messages {
             append(if (paused) "⏸ Paused" else "🟢 Active")
         }
 
-    override fun taskMenuPauseButton(id: Long) = "⏸ Pause #$id"
+    override fun taskMenuPauseButton(id: Long) = "Pause #$id"
 
-    override fun taskMenuResumeButton(id: Long) = "▶️ Resume #$id"
+    override fun taskMenuResumeButton(id: Long) = "Resume #$id"
 
-    override fun taskMenuCancelButton(id: Long) = "🗑 Cancel #$id"
+    override fun taskMenuCancelButton(id: Long) = "Cancel #$id"
 
     override fun taskMenuDeleteConfirmation(id: Long, label: String): String =
         "<b>Delete task #$id · $label?</b>\n\nThis can't be undone."

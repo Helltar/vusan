@@ -33,6 +33,16 @@ Before it: [running a turn](turn.md).
       to stand alone without the running line and without the button; either way that happens in `withLiveProgress`'s
       `finally`, so a turn canceled by `/stop` still takes its bubble off the screen. In a slow-mode group the bot's messages are rationed, so an activity alone never opens one — only words
       the model chose to send do.
+    - **The interface's icons** — the running line ends in an animated spinner, and the stop button and the task
+      menu's buttons carry monochrome icons, all custom emoji from the public pack `vusan_ui_by_VusanAgent`
+      (`InterfaceIcons`, which holds their ids and the plain emoji each falls back to; the texts in `i18n/Messages`
+      carry no icon). A bot may send custom emoji only while its owner has Telegram Premium, and nothing says so up
+      front: without it Telegram keeps the plain emoji in a text and drops the entity, while a button's icon vanishes
+      leaving the bare word, with nothing in the answer to show it. So the first status carrying the spinner settles
+      it for the process (`InterfaceIcons.learnFrom` reads the sent or edited message): until then buttons keep their
+      plain emoji, and if the entity was dropped, everything stays plain — the ellipsis, ⏹, ⏸, ▶️, 🗑 — until a
+      restart. A status that loses its markup to broken HTML in a plan ends in the ellipsis too. The pack is shared by
+      every deployment, so an icon in it is never deleted; a redrawn one goes in beside it under a new id.
     - **Announcing a plan before the work** — every output a tool produces is queued and delivered when the turn is
       over, which for a long turn means the plan arrives after the thing it planned. `announcePlan` (`MessageTools`) is
       the way out: it writes into the live status through `TurnNarrator` — a neutral interface in `agent/`, so no

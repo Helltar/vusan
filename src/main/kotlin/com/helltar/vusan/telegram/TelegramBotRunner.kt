@@ -102,6 +102,8 @@ internal class TelegramBotRunner(
     private val floor: ChatFloor = ChatFloor(),
     // where the bot api is served: telegram's own server, or a local one the bot was moved to
     private val telegramUrl: TelegramUrl = TelegramUrl.DEFAULT_URL,
+    // shared with the task menu, so what one status learns about custom emoji holds for every button
+    private val icons: InterfaceIcons = InterfaceIcons(),
 ) {
 
     private val heartbeat = Heartbeat()
@@ -109,7 +111,7 @@ internal class TelegramBotRunner(
     private val spool = UpdateSpool(SPOOL_RETENTION)
 
     private val turns =
-        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, sandbox, fallbackInUse)
+        AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, sandbox, fallbackInUse, icons)
 
     private val turnStop = TurnStopHandler(client, agent)
     private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, turns, accessPolicy)

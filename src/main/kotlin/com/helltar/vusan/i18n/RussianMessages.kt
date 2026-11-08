@@ -29,7 +29,7 @@ internal object RussianMessages : Messages {
 
     override val nothingToStopReply = "Сейчас ничего не делаю, нечего останавливать"
 
-    override val turnStopButton = "⏹ Остановить"
+    override val turnStopButton = "Остановить"
 
     override val turnStopNotOwnerAlert = "Это запрос другого пользователя."
 
@@ -52,11 +52,11 @@ internal object RussianMessages : Messages {
 
     override val taskMenuErrorAlert = "Не удалось обновить задачу — попробуй ещё раз."
 
-    override val taskMenuRefreshButton = "🔄 Обновить"
+    override val taskMenuRefreshButton = "Обновить"
 
-    override val taskMenuBackButton = "↩️ Назад"
+    override val taskMenuBackButton = "Назад"
 
-    override val taskMenuDeleteButton = "🗑 Удалить"
+    override val taskMenuDeleteButton = "Удалить"
 
     override val tasksCommandDescription = "Управлять запланированными задачами"
     override val clearCommandDescription = "Очистить историю переписки"
@@ -125,11 +125,11 @@ internal object RussianMessages : Messages {
             append(if (paused) "⏸ На паузе" else "🟢 Активна")
         }
 
-    override fun taskMenuPauseButton(id: Long) = "⏸ Пауза #$id"
+    override fun taskMenuPauseButton(id: Long) = "Пауза #$id"
 
-    override fun taskMenuResumeButton(id: Long) = "▶️ Возобновить #$id"
+    override fun taskMenuResumeButton(id: Long) = "Возобновить #$id"
 
-    override fun taskMenuCancelButton(id: Long) = "🗑 Отменить #$id"
+    override fun taskMenuCancelButton(id: Long) = "Отменить #$id"
 
     override fun taskMenuDeleteConfirmation(id: Long, label: String): String =
         "<b>Удалить задачу #$id · $label?</b>\n\nЭто действие нельзя отменить."

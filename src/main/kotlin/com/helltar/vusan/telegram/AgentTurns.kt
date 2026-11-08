@@ -56,6 +56,7 @@ internal class AgentTurns(
     // whether there is a sandbox: the attachment block points the model there only where it can go
     private val sandbox: Boolean,
     private val fallbackInUse: () -> FallbackInUse? = { null },
+    private val icons: InterfaceIcons = InterfaceIcons(),
 ) {
 
     suspend fun dispatchToAgent(
@@ -221,6 +222,7 @@ internal class AgentTurns(
                     fallbackInUse = fallbackInUse,
                     onPosted = { text -> delivery.recordPostedMidTurn(context, text) },
                     acknowledge = acknowledge,
+                    icons = icons,
                 ) { setActivity, status ->
                     if (waitForTurn)
                         agent.handleQueued(request, setActivity, status)
