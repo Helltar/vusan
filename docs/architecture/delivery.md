@@ -33,7 +33,8 @@ Before it: [running a turn](turn.md).
       expandable quote, then, after a blank line, the running line under the activity's icon. A private chat's bubble
       quotes nothing, since there is only the one conversation; a group's quotes the message it answers. `finish`
       deletes it, or, when the model put its own words in it, leaves those words over every step, folded, under how
-      long the turn took (`recordText`), without the running line and without the button; either way that happens in `withLiveProgress`'s
+      long the turn took and, when any of it ran on the fallback, which model answered (`recordText`; the usual one goes
+      unnamed, so a name there is news), without the running line and without the button; either way that happens in `withLiveProgress`'s
       `finally`, so a turn canceled by `/stop` still takes its bubble off the screen. In a slow-mode group the bot's messages are rationed, so an activity alone never opens one — only words
       the model chose to send do.
     - **The interface's icons** — each activity has a looping monochrome animation before its running line, a

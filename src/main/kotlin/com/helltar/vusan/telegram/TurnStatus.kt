@@ -4,6 +4,7 @@ import com.helltar.vusan.telegram.InterfaceIcons.Icon
 import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.agent.TurnNarrator
+import com.helltar.vusan.common.escapeHtml
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.telegram.callback.turnStopCallbackData
@@ -101,6 +102,9 @@ internal class TurnStatus(
     // what the turn has finished, in the order it first did each, shown folded above the running line
     private val done = mutableListOf<ToolActivity>()
     private val started = TimeSource.Monotonic.markNow()
+
+    // the fallback model any part of the turn ran on, named in the record it leaves
+    private var fallbackModel: String? = null
     private var shown: String? = null
     private var parseMode: String? = ParseMode.HTML
     private var gone = false
@@ -299,21 +303,27 @@ internal class TurnStatus(
             plan = announcement,
             steps = done.map { icons.done(messages.progressLabel(it), html) },
             running = current?.let { icons.running(it, messages.progressLabel(it), html) },
-            fallbackNote = fallbackInUse()?.let { messages.fallbackModelNote(it.model, it.primaryBackIn) },
+            fallbackNote =
+                fallbackInUse()?.let {
+                    fallbackModel = it.model
+                    messages.fallbackModelNote(it.model, it.primaryBackIn)
+                },
             html = html,
         )
     }
 
     /**
      * What stays of the bubble once its turn is over or has moved under a newer message: the plan and every step,
-     * folded, under how long the turn took ([withTime]). A turn that announced no plan leaves nothing: its
+     * folded, under how long the turn took ([withTime]) and, when it ran on the fallback, which model answered;
+     * the usual model goes unnamed, so a name there is news. A turn that announced no plan leaves nothing: its
      * status was only ever a progress bar.
      */
     private fun recordText(withTime: Boolean): String? {
         val plan = announcement ?: return null
         val html = parseMode == ParseMode.HTML
         val steps = (done + listOfNotNull(current)).distinct().map { icons.done(messages.progressLabel(it), html) }
-        val took = if (withTime && steps.isNotEmpty()) listOf(messages.progressDone(started.elapsedNow())) else emptyList()
+        val model = (fallbackInUse()?.model ?: fallbackModel)?.let { if (html) " · <code>${it.escapeHtml()}</code>" else " · $it" }
+        val took = if (withTime && steps.isNotEmpty()) listOf(messages.progressDone(started.elapsedNow()) + model.orEmpty()) else emptyList()
 
         return statusMessageText(plan, took + steps, running = null, html = html)
     }

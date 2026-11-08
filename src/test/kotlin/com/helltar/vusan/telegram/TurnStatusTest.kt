@@ -1,6 +1,7 @@
 package com.helltar.vusan.telegram
 
 import com.helltar.vusan.agent.ToolActivity
+import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.telegram.delivery.ChatTarget
@@ -232,6 +233,7 @@ class TurnStatusTest {
         posted: MutableList<String>,
         acknowledges: Boolean = false,
         activityOpensIt: Boolean = true,
+        fallbackInUse: () -> FallbackInUse? = { null },
     ) =
         TurnStatus(
             client = client,
@@ -242,6 +244,7 @@ class TurnStatusTest {
             activityOpensIt = activityOpensIt,
             acknowledges = acknowledges,
             onPosted = { posted += it },
+            fallbackInUse = fallbackInUse,
         )
 
     private fun chatAccepting(accepts: Boolean): TelegramClient =
@@ -284,6 +287,20 @@ class TurnStatusTest {
         )
         assertTrue(calls.last().startsWith("edit #1 [I will compare the reviews\n\n<blockquote expandable>Done in "), calls.last())
         assertTrue(calls.last().endsWith("$searched\n${icons.done("Reading the page", html = true)}</blockquote>] button=false"), calls.last())
+    }
+
+    // the usual model goes unnamed; a turn that ran on the fallback says which model answered
+    @Test
+    fun `a record names the fallback model the turn ran on`() = runBlocking {
+        val calls = mutableListOf<String>()
+
+        statusOver(recordingChat(calls), posted = mutableListOf(), fallbackInUse = { FallbackInUse("gpt-5.4-mini", primaryBackIn = null) }).apply {
+            say("I will compare the reviews")
+            showActivity(ToolActivity.SEARCHING_WEB, mayOpen = true)
+            finish()
+        }
+
+        assertTrue(Regex("""Done in \d+ s · <code>gpt-5\.4-mini</code>\n""").containsMatchIn(calls.last()), calls.last())
     }
 
     // the emoji is read first in a chat full of text, so a shared or missing picture says less than the
