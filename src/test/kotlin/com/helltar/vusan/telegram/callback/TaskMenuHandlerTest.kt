@@ -87,7 +87,7 @@ class TaskMenuHandlerTest {
         assertEquals(ParseMode.HTML, request.parseMode)
         assertContains(
             request.text,
-            "<b>🗓 Your scheduled tasks in this chat</b>\n\n" +
+            "<b>🗓️ Your scheduled tasks in this chat</b>\n\n" +
                     "<i>In this chat: 1\nAcross all chats: 2 · limit: 5</i>",
         )
         assertContains(request.text, "<b>#$visibleId · group &lt;report&gt; &amp; news</b>")
@@ -117,7 +117,7 @@ class TaskMenuHandlerTest {
         val privateMenu = assertIs<SendMessage>(client.requests.single())
         assertContains(
             privateMenu.text,
-            "<b>🗓 Your scheduled tasks</b>\n\n<i>Tasks: 0 · limit: 5</i>\n\n",
+            "<b>🗓️ Your scheduled tasks</b>\n\n<i>Tasks: 0 · limit: 5</i>\n\n",
         )
 
         client.requests.clear()
@@ -133,7 +133,7 @@ class TaskMenuHandlerTest {
         val groupMenu = assertIs<SendMessage>(client.requests.single())
         assertContains(
             groupMenu.text,
-            "<b>🗓 Your scheduled tasks in this chat</b>\n\n" +
+            "<b>🗓️ Your scheduled tasks in this chat</b>\n\n" +
                     "<i>In this chat: 0\nAcross all chats: 0 · limit: 5</i>\n\n",
         )
     }
@@ -189,7 +189,7 @@ class TaskMenuHandlerTest {
         val pausedEdit = assertIs<EditMessageText>(client.requests.first())
         assertEquals(ParseMode.HTML, pausedEdit.parseMode)
         assertContains(pausedEdit.text, "<i>Tasks: 1 · limit: 5</i>")
-        assertContains(pausedEdit.text, "⏸ Paused")
+        assertContains(pausedEdit.text, "⏸️ Paused")
         val pausedKeyboard = assertIs<InlineKeyboardMarkup>(pausedEdit.replyMarkup)
         assertEquals("tasks:100:resume:$id", pausedKeyboard.keyboard.first()[0].callbackData)
         assertIs<AnswerCallbackQuery>(client.requests.last())

@@ -90,9 +90,9 @@ internal object SpanishMessages : Messages {
 
     override fun taskMenuTitle(currentChatOnly: Boolean): String =
         if (currentChatOnly)
-            "<b>🗓 Tus tareas programadas en este chat</b>"
+            "<b>🗓️ Tus tareas programadas en este chat</b>"
         else
-            "<b>🗓 Tus tareas programadas</b>"
+            "<b>🗓️ Tus tareas programadas</b>"
 
     override fun taskMenuCapacity(currentChatOnly: Boolean, listed: Int, total: Int, limit: Int): String =
         if (currentChatOnly)
@@ -124,7 +124,7 @@ internal object SpanishMessages : Messages {
             append("<b>#$id · $label</b>\n")
             append("🕒 $nextFire\n")
             append("🔁 $recurrence\n")
-            append(if (paused) "⏸ En pausa" else "🟢 Activa")
+            append(if (paused) "⏸️ En pausa" else "🟢 Activa")
         }
 
     override fun taskMenuPauseButton(id: Long) = "Pausar #$id"

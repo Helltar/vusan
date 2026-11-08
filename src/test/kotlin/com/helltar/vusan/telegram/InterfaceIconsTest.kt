@@ -23,7 +23,7 @@ class InterfaceIconsTest {
         assertTrue(icons.working.contains("<tg-emoji"))
 
         val button = icons.button(Icon.STOP, "Stop", "stop:1")
-        assertEquals("⏹ Stop", button.text)
+        assertEquals("⏹\uFE0F Stop", button.text)
         assertNull(button.iconCustomEmojiId)
     }
 
@@ -47,7 +47,7 @@ class InterfaceIconsTest {
         icons.learnFrom(sent())
 
         assertEquals(InterfaceIcons.PLAIN_WORKING, icons.working)
-        assertEquals("🗑 Cancel #3", icons.button(Icon.DELETE, "Cancel #3", "task:cancel").text)
+        assertEquals("🗑\uFE0F Cancel #3", icons.button(Icon.DELETE, "Cancel #3", "task:cancel").text)
     }
 
     @Test

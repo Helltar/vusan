@@ -19,11 +19,13 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
  */
 internal class InterfaceIcons {
 
+    // a fallback whose default presentation is text (⏹, ⏸, 🗑) carries U+FE0F, or a client draws the emoji
+    // but leaves it a text glyph's width, crowding the word after it
     enum class Icon(val customEmojiId: String, val fallback: String) {
-        STOP("5438505993577213069", "⏹"),
-        PAUSE("5438286619532639132", "⏸"),
+        STOP("5438505993577213069", "⏹️"),
+        PAUSE("5438286619532639132", "⏸️"),
         RESUME("5440413002006309207", "▶️"),
-        DELETE("5440671271274718851", "🗑"),
+        DELETE("5440671271274718851", "🗑️"),
         REFRESH("5440560431053715320", "🔄"),
         BACK("5440735588409980265", "↩️"),
     }
