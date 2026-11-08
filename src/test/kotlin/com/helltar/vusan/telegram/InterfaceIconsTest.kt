@@ -1,5 +1,6 @@
 package com.helltar.vusan.telegram
 
+import com.helltar.vusan.agent.ToolActivity
 import com.helltar.vusan.telegram.InterfaceIcons.Icon
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,7 +21,7 @@ class InterfaceIconsTest {
     fun `until a status tells, the running line tries the custom sign and buttons keep plain emoji`() {
         val icons = InterfaceIcons()
 
-        assertTrue(icons.working.contains("<tg-emoji"))
+        assertTrue(InterfaceIcons.carriesCustomEmoji(icons.running(ToolActivity.SEARCHING_WEB, "Searching", html = true)))
 
         val button = icons.button(Icon.STOP, "Stop", "stop:1")
         assertEquals("⏹\uFE0F Stop", button.text)
@@ -36,7 +37,7 @@ class InterfaceIconsTest {
         val button = icons.button(Icon.PAUSE, "Pause #3", "task:pause")
         assertEquals("Pause #3", button.text)
         assertEquals(Icon.PAUSE.customEmojiId, button.iconCustomEmojiId)
-        assertTrue(icons.working.contains("<tg-emoji"))
+        assertTrue(InterfaceIcons.carriesCustomEmoji(icons.done("Searched", html = true)))
     }
 
     // telegram keeps a bot without the right to custom emoji to the plain one and drops the entity
@@ -46,7 +47,8 @@ class InterfaceIconsTest {
 
         icons.learnFrom(sent())
 
-        assertEquals(InterfaceIcons.PLAIN_WORKING, icons.working)
+        assertEquals("🌐 Searching…", icons.running(ToolActivity.SEARCHING_WEB, "Searching", html = true))
+        assertEquals("✓ Searched", icons.done("Searched", html = true))
         assertEquals("🗑\uFE0F Cancel #3", icons.button(Icon.DELETE, "Cancel #3", "task:cancel").text)
     }
 
@@ -57,6 +59,6 @@ class InterfaceIconsTest {
         icons.learnFrom(sent())
         icons.learnFrom(sent("custom_emoji"))
 
-        assertEquals(InterfaceIcons.PLAIN_WORKING, icons.working)
+        assertEquals("✓ Searched", icons.done("Searched", html = true))
     }
 }

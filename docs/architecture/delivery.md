@@ -29,19 +29,24 @@ Before it: [running a turn](turn.md).
       clock runs from the start of the turn, so a run of quick searches adds up. Once a message is open every activity
       fills it, light or not, since naming the next step is the edit it would make anyway (`showActivity`'s `mayOpen`).
       Its writes are `NonCancellable`, because a send canceled in flight can still have created the message, leaving a
-      bubble whose id nobody holds. `finish` deletes it, or, when the model put its own words in it, edits those words
-      to stand alone without the running line and without the button; either way that happens in `withLiveProgress`'s
+      bubble whose id nobody holds. Its body is block by block (`statusMessageText`): the plan, the steps already done folded into an
+      expandable quote, then, after a blank line, the running line under the activity's icon. A private chat's bubble
+      quotes nothing, since there is only the one conversation; a group's quotes the message it answers. `finish`
+      deletes it, or, when the model put its own words in it, leaves those words over every step, folded, under how
+      long the turn took (`recordText`), without the running line and without the button; either way that happens in `withLiveProgress`'s
       `finally`, so a turn canceled by `/stop` still takes its bubble off the screen. In a slow-mode group the bot's messages are rationed, so an activity alone never opens one — only words
       the model chose to send do.
-    - **The interface's icons** — the running line ends in an animated spinner, and the stop button and the task
-      menu's buttons carry monochrome icons, all custom emoji from the public pack `vusan_ui_by_VusanAgent`
-      (`InterfaceIcons`, which holds their ids and the plain emoji each falls back to; the texts in `i18n/Messages`
-      carry no icon). A bot may send custom emoji only while its owner has Telegram Premium, and nothing says so up
+    - **The interface's icons** — each activity has a looping monochrome animation before its running line, a
+      finished step a check, and the stop button and the task menu's buttons monochrome icons, all custom emoji from
+      the public pack `vusan_ui_by_VusanAgent` (`InterfaceIcons`, which holds their ids and the plain emoji each falls
+      back to; the texts in `i18n/Messages` carry no icon). The animations are drawn by a script outside the
+      repository, as 100×100 VP9 with alpha, a second long. A bot may send custom emoji only while its owner has Telegram Premium, and nothing says so up
       front: without it Telegram keeps the plain emoji in a text and drops the entity, while a button's icon vanishes
-      leaving the bare word, with nothing in the answer to show it. So the first status carrying the spinner settles
+      leaving the bare word, with nothing in the answer to show it. So the first status carrying a custom emoji settles
       it for the process (`InterfaceIcons.learnFrom` reads the sent or edited message): until then buttons keep their
-      plain emoji, and if the entity was dropped, everything stays plain — the ellipsis, ⏹, ⏸, ▶️, 🗑 — until a
-      restart. A status that loses its markup to broken HTML in a plan ends in the ellipsis too. The pack is shared by
+      plain emoji, and if the entity was dropped, everything stays plain — the activity's colored emoji with an
+      ellipsis after the line, ✓ for a step, ⏹, ⏸, ▶️, 🗑 — until a restart. A status that loses its markup to broken
+      HTML in a plan draws them plain too, its steps as plain lines. The pack is shared by
       every deployment, so an icon in it is never deleted; a redrawn one goes in beside it under a new id.
     - **Announcing a plan before the work** — every output a tool produces is queued and delivered when the turn is
       over, which for a long turn means the plan arrives after the thing it planned. `announcePlan` (`MessageTools`) is

@@ -156,6 +156,11 @@ internal object SpanishMessages : Messages {
         "↳ en el modelo de reserva: <code>${model.escapeHtml()}</code>" +
                 primaryBackIn?.let { "\n↳ el habitual vuelve en unos <b>${waitLabel(it)}</b>" }.orEmpty()
 
+    override fun progressDone(elapsed: Duration): String =
+        elapsed.toComponents { minutes, seconds, _ ->
+            if (minutes > 0) "Listo en $minutes min $seconds s" else "Listo en ${maxOf(seconds, 1)} s"
+        }
+
     override fun progressLabel(activity: ToolActivity): String =
 
         when (activity) {

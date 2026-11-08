@@ -99,7 +99,7 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 
 ### In the chat
 
-- **Live progress** — shows what it is doing, and sends early results while a long job runs.
+- **Live progress** — shows what it is doing and the steps already done, sends early results while a long job runs, and keeps how long a planned job took.
 - **Stop button** — ends a running answer from the progress message, in groups too.
 - **Inline choices** — asks for decisions or confirmation with buttons and continues when you tap.
 - **Edits** — answers when you add its mention, or its name, to an earlier message.

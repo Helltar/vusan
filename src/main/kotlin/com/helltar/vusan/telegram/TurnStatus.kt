@@ -23,60 +23,32 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.time.TimeSource
 import org.telegram.telegrambots.meta.api.methods.ParseMode
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardRow
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * The status body: the announced plan, and under it the line naming what runs. The line is plain text (the
- * emoji sets it apart) ending in [working], an ellipsis or the animated sign of [InterfaceIcons]. The fallback
- * note brings its own markup, as the plan does.
+ * The status body, block by block with a blank line between: the announced plan, the steps already done, and
+ * the running line with the fallback note under it. With markup ([html]) the steps fold into an expandable
+ * quote, so a long turn keeps one line of height for them; the fallback note brings its own markup, as the plan
+ * does.
  */
 internal fun statusMessageText(
     plan: String?,
-    label: String?,
+    steps: List<String>,
+    running: String?,
     fallbackNote: String? = null,
-    working: String = InterfaceIcons.PLAIN_WORKING,
+    html: Boolean = true,
 ): String? {
-    val running = listOfNotNull(label?.let { "$it$working" }, fallbackNote).joinToString("\n").ifEmpty { null }
+    val done =
+        steps.takeIf { it.isNotEmpty() }
+            ?.joinToString("\n")
+            ?.let { if (html) "<blockquote expandable>$it</blockquote>" else it }
+    val now = listOfNotNull(running, fallbackNote).joinToString("\n").ifEmpty { null }
 
-    return when {
-        plan == null -> running
-        running == null -> plan
-        else -> "$plan\n\n$running"
-    }
-}
-
-/**
- * The words for the running tool behind an emoji. The emoji is the same in every language, so it lives here
- * rather than in each [Messages].
- */
-internal fun activityStatusLabel(activity: ToolActivity, messages: Messages): String {
-    val emoji =
-        when (activity) {
-            ToolActivity.WRITING -> "✍️"
-            ToolActivity.SEARCHING_WEB -> "🌐"
-            ToolActivity.READING_PAGE -> "📄"
-            ToolActivity.READING_CHANNEL -> "📢"
-            ToolActivity.READING_TRANSCRIPT -> "📝"
-            ToolActivity.READING_CHAT_LOG -> "📜"
-            ToolActivity.SEARCHING_IMAGES -> "🖼️"
-            ToolActivity.SEARCHING_GIF -> "🎞️"
-            ToolActivity.DRAWING -> "🎨"
-            ToolActivity.FILMING -> "🎥"
-            ToolActivity.RUNNING_CODE -> "💻"
-            ToolActivity.LOOKING_AT_IMAGE -> "👀"
-            ToolActivity.WATCHING_VIDEO -> "📺"
-            ToolActivity.DOWNLOADING_VIDEO -> "🎬"
-            ToolActivity.DOWNLOADING_AUDIO -> "🎵"
-            ToolActivity.SENDING_FILE -> "📎"
-            ToolActivity.SPEAKING -> "🎙️"
-            ToolActivity.REMEMBERING -> "🧠"
-            ToolActivity.MANAGING_TASKS -> "⏰"
-        }
-
-    return "$emoji ${messages.progressLabel(activity)}"
+    return listOfNotNull(plan, done, now).joinToString("\n\n").ifEmpty { null }
 }
 
 /**
@@ -109,8 +81,11 @@ internal class TurnStatus(
     private val fallbackInUse: () -> FallbackInUse? = { null },
     // the model's words, reported the moment they reach the chat.
     private val onPosted: suspend (text: String) -> Unit = {},
-    // the working sign and the stop button's icon, and what this status learns about them
+    // the activities' icons and the stop button's, and what this status learns about them
     private val icons: InterfaceIcons = InterfaceIcons(),
+    // whether the bubble quotes the message it answers: in a group it says which of several conversations it
+    // belongs to, in a private chat there is only the one
+    private val quotes: Boolean = true,
 ) : TurnNarrator {
 
     // written from two places, the narrating tool and the activity collector, each reading the state it
@@ -121,7 +96,11 @@ internal class TurnStatus(
     private var anchor: Long? = replyToMessageId
     private var messageId: Int? = null
     private var announcement: String? = null
-    private var label: String? = null
+    private var current: ToolActivity? = null
+
+    // what the turn has finished, in the order it first did each, shown folded above the running line
+    private val done = mutableListOf<ToolActivity>()
+    private val started = TimeSource.Monotonic.markNow()
     private var shown: String? = null
     private var parseMode: String? = ParseMode.HTML
     private var gone = false
@@ -150,7 +129,8 @@ internal class TurnStatus(
      */
     suspend fun showActivity(activity: ToolActivity, mayOpen: Boolean): Boolean =
         edits.withLock {
-            label = activityStatusLabel(activity, messages)
+            current?.takeIf { it != activity && it !in done }?.let { done += it }
+            current = activity
 
             if (messageId == null && !(mayOpen && activityOpensIt)) false else render()
         }
@@ -204,18 +184,19 @@ internal class TurnStatus(
             // bubble keeps only the plan, as [finish] would leave it, and a new one under this message carries
             // the running line and the button.
             messageId?.let { id ->
-                val plan = announcement
+                val record = recordText(withTime = false)
 
                 messageId = null
                 shown = null
                 announcement = null
+                done.clear()
 
                 runCatching {
                     withContext(NonCancellable) {
-                        if (plan == null)
+                        if (record == null)
                             deleteChatMessage(client, target.chatId, id)
                         else
-                            editTextMessage(client, target.chatId, id, plan, replyMarkup = null, parseMode = parseMode)
+                            editTextMessage(client, target.chatId, id, record, replyMarkup = null, parseMode = parseMode)
                     }
                 }.onFailure { error -> error.rethrowIfCancellation() }
 
@@ -238,16 +219,16 @@ internal class TurnStatus(
             }
 
             val id = messageId ?: return
-            val plan = announcement
+            val record = recordText(withTime = true)
 
             messageId = null
             gone = true
 
             runCatching {
-                if (plan == null)
+                if (record == null)
                     deleteChatMessage(client, target.chatId, id)
                 else
-                    editTextMessage(client, target.chatId, id, plan, replyMarkup = null, parseMode = parseMode)
+                    editTextMessage(client, target.chatId, id, record, replyMarkup = null, parseMode = parseMode)
             }.onFailure { error ->
                 error.rethrowIfCancellation()
 
@@ -310,14 +291,32 @@ internal class TurnStatus(
             }
     }
 
-    // the animated sign is markup, so a status that dropped its markup keeps the ellipsis
-    private fun statusText(): String? =
-        statusMessageText(
-            announcement,
-            label,
-            fallbackInUse()?.let { messages.fallbackModelNote(it.model, it.primaryBackIn) },
-            working = if (parseMode == ParseMode.HTML) icons.working else InterfaceIcons.PLAIN_WORKING,
+    // the icons are markup, so a status that dropped its markup draws plain emoji
+    private fun statusText(): String? {
+        val html = parseMode == ParseMode.HTML
+
+        return statusMessageText(
+            plan = announcement,
+            steps = done.map { icons.done(messages.progressLabel(it), html) },
+            running = current?.let { icons.running(it, messages.progressLabel(it), html) },
+            fallbackNote = fallbackInUse()?.let { messages.fallbackModelNote(it.model, it.primaryBackIn) },
+            html = html,
         )
+    }
+
+    /**
+     * What stays of the bubble once its turn is over or has moved under a newer message: the plan and every step,
+     * folded, under how long the turn took ([withTime]). A turn that announced no plan leaves nothing: its
+     * status was only ever a progress bar.
+     */
+    private fun recordText(withTime: Boolean): String? {
+        val plan = announcement ?: return null
+        val html = parseMode == ParseMode.HTML
+        val steps = (done + listOfNotNull(current)).distinct().map { icons.done(messages.progressLabel(it), html) }
+        val took = if (withTime && steps.isNotEmpty()) listOf(messages.progressDone(started.elapsedNow())) else emptyList()
+
+        return statusMessageText(plan, took + steps, running = null, html = html)
+    }
 
     // a write in flight when the turn ends must finish: `/stop` or the turn ending cancels the collector, and
     // a canceled send may still have created the message, leaving a bubble nothing takes down.
@@ -332,7 +331,7 @@ internal class TurnStatus(
                         target = target,
                         text = text,
                         parseMode = parseMode,
-                        replyParameters = replyParameters(anchor),
+                        replyParameters = replyParameters(anchor.takeIf { quotes }),
                         replyMarkup = stopKeyboard(),
                     ).also { messageId = it.messageId }
                 } else {
@@ -346,8 +345,8 @@ internal class TurnStatus(
                     )
                 }
 
-            // the working sign went up as markup: what telegram kept of it says whether custom emoji go through
-            if (sent != null && parseMode == ParseMode.HTML && text.contains(icons.working)) icons.learnFrom(sent)
+            // an icon went up as markup: what telegram kept of it says whether custom emoji go through
+            if (sent != null && parseMode == ParseMode.HTML && InterfaceIcons.carriesCustomEmoji(text)) icons.learnFrom(sent)
 
             text
         }

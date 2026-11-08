@@ -157,6 +157,7 @@ private fun TelegramClient.statusFor(
         fallbackInUse = fallbackInUse,
         onPosted = onPosted,
         icons = icons,
+        quotes = !request.context.chat.isPrivate,
     )
 
 private suspend fun TelegramClient.indicateChatAction(target: ChatTarget, action: ActionType) {

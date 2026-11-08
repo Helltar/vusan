@@ -29,7 +29,7 @@ internal object RussianMessages : Messages {
 
     override val nothingToStopReply = "Сейчас ничего не делаю, нечего останавливать"
 
-    override val turnStopButton = "Остановить"
+    override val turnStopButton = "Стоп"
 
     override val turnStopNotOwnerAlert = "Это запрос другого пользователя."
 
@@ -153,6 +153,11 @@ internal object RussianMessages : Messages {
     override fun fallbackModelNote(model: String, primaryBackIn: Duration?): String =
         "↳ на резервной модели: <code>${model.escapeHtml()}</code>" +
                 primaryBackIn?.let { "\n↳ основная будет примерно через <b>${waitLabel(it)}</b>" }.orEmpty()
+
+    override fun progressDone(elapsed: Duration): String =
+        elapsed.toComponents { minutes, seconds, _ ->
+            if (minutes > 0) "Готово за $minutes мин $seconds с" else "Готово за ${maxOf(seconds, 1)} с"
+        }
 
     override fun progressLabel(activity: ToolActivity): String =
 

@@ -23,32 +23,47 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 
 class TurnStatusTest {
 
-    // until a status shows whether custom emoji go through, the running line ends in the animated sign
-    private val spinner = InterfaceIcons().working
+    // until a status shows whether custom emoji go through, every icon goes up as a custom one
+    private val icons = InterfaceIcons()
+    private val running = icons.running(ToolActivity.RUNNING_CODE, "Running code", html = true)
+    private val ranCode = icons.done("Running code", html = true)
 
     @Test
-    fun `the running line sits under the plan and carries its own ellipsis`() {
-        assertEquals(
-            "I will build the game\n\nRunning code…",
-            statusMessageText(plan = "I will build the game", label = "Running code"),
-        )
+    fun `the running line sits under the plan`() {
+        assertEquals("I will build the game\n\nRunning code", statusMessageText("I will build the game", emptyList(), "Running code"))
     }
 
     @Test
     fun `either half stands alone`() {
-        assertEquals("Searching the web…", statusMessageText(plan = null, label = "Searching the web"))
-        assertEquals("I will build the game", statusMessageText(plan = "I will build the game", label = null))
+        assertEquals("Searching the web", statusMessageText(plan = null, steps = emptyList(), running = "Searching the web"))
+        assertEquals("I will build the game", statusMessageText("I will build the game", emptyList(), running = null))
     }
 
-    // the bubble opens on the first named activity or the model's first words; before either there is nothing
-    // to show.
+    // a blank line keeps the running line apart from the quote above it
+    @Test
+    fun `finished steps fold into a quote between the plan and the running line`() {
+        assertEquals(
+            "I will build the game\n\n<blockquote expandable>✓ Searching the web\n✓ Reading a page</blockquote>\n\nRunning code",
+            statusMessageText("I will build the game", listOf("✓ Searching the web", "✓ Reading a page"), "Running code"),
+        )
+    }
+
+    @Test
+    fun `without markup the steps are plain lines`() {
+        assertEquals(
+            "✓ Searching the web\n\nRunning code…",
+            statusMessageText(plan = null, steps = listOf("✓ Searching the web"), running = "Running code…", html = false),
+        )
+    }
+
     @Test
     fun `a fallback note sits under the running line`() {
         assertEquals(
-            "I will build the game\n\n\uD83D\uDCBB Running code…\n\u21B3 on the fallback model: <code>gpt-5.4-mini</code>",
+            "I will build the game\n\n\uD83D\uDCBB Running code\n\u21B3 on the fallback model: <code>gpt-5.4-mini</code>",
             statusMessageText(
                 plan = "I will build the game",
-                label = "\uD83D\uDCBB Running code",
+                steps = emptyList(),
+                running = "\uD83D\uDCBB Running code",
                 fallbackNote = Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini", primaryBackIn = null),
             ),
         )
@@ -56,7 +71,12 @@ class TurnStatusTest {
         // a turn with nothing named yet still says where it answers from
         assertEquals(
             "\u21B3 on the fallback model: <code>gpt-5.4-mini</code>",
-            statusMessageText(plan = null, label = null, fallbackNote = Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini", primaryBackIn = null)),
+            statusMessageText(
+                plan = null,
+                steps = emptyList(),
+                running = null,
+                fallbackNote = Messages.of(Language.ENGLISH).fallbackModelNote("gpt-5.4-mini", primaryBackIn = null),
+            ),
         )
     }
 
@@ -107,10 +127,10 @@ class TurnStatusTest {
         assertEquals(
             listOf(
                 "send #1 [I will build the game] button=true",
-                "edit #1 [I will build the game\n\n💻 Running code$spinner] button=true",
+                "edit #1 [I will build the game\n\n$running] button=true",
                 "send #2 [halfway there] button=false",
-                "edit #1 [I will build the game] button=false",
-                "send #3 [💻 Running code$spinner] button=true",
+                "edit #1 [I will build the game\n\n<blockquote expandable>$ranCode</blockquote>] button=false",
+                "send #3 [$running] button=true",
                 "delete #3",
             ),
             calls,
@@ -133,9 +153,9 @@ class TurnStatusTest {
         assertEquals(
             listOf(
                 "send #1 [I will build the game] button=true",
-                "edit #1 [I will build the game\n\n💻 Running code$spinner] button=true",
+                "edit #1 [I will build the game\n\n$running] button=true",
                 "send #2 [halfway there] button=false",
-                "edit #1 [I will build the game] button=false",
+                "edit #1 [I will build the game\n\n<blockquote expandable>$ranCode</blockquote>] button=false",
             ),
             calls,
         )
@@ -240,33 +260,48 @@ class TurnStatusTest {
 
     @Test
     fun `nothing to say yields no message`() {
-        assertNull(statusMessageText(plan = null, label = null))
+        assertNull(statusMessageText(plan = null, steps = emptyList(), running = null))
+    }
+
+    // a planned turn keeps a record of what it did and how long it took; the steps go up as the turn moves on
+    @Test
+    fun `a planned turn ends as its plan over the folded steps and the time they took`() = runBlocking {
+        val calls = mutableListOf<String>()
+
+        statusOver(recordingChat(calls), posted = mutableListOf()).apply {
+            say("I will compare the reviews")
+            showActivity(ToolActivity.SEARCHING_WEB, mayOpen = true)
+            showActivity(ToolActivity.READING_PAGE, mayOpen = true)
+            finish()
+        }
+
+        val searched = icons.done("Searching the web", html = true)
+        val reading = icons.running(ToolActivity.READING_PAGE, "Reading the page", html = true)
+
+        assertEquals(
+            "edit #1 [I will compare the reviews\n\n<blockquote expandable>$searched</blockquote>\n\n$reading] button=true",
+            calls[2],
+        )
+        assertTrue(calls.last().startsWith("edit #1 [I will compare the reviews\n\n<blockquote expandable>Done in "), calls.last())
+        assertTrue(calls.last().endsWith("$searched\n${icons.done("Reading the page", html = true)}</blockquote>] button=false"), calls.last())
     }
 
     // the emoji is read first in a chat full of text, so a shared or missing picture says less than the
     // words.
     @Test
-    fun `every activity is named behind an emoji of its own`() {
-        val messages = Messages.of(Language.ENGLISH)
+    fun `every activity has an icon of its own`() {
+        val plain = ToolActivity.entries.map { InterfaceIcons.activityFallback(it) }
+        val custom = ToolActivity.entries.map { icons.running(it, "x", html = true) }
 
-        val emojis =
-            ToolActivity.entries.map { activity ->
-                val line = activityStatusLabel(activity, messages)
-                val emoji = line.substringBefore(' ')
-
-                assertTrue(emoji.isNotBlank() && emoji.none { it.isLetterOrDigit() }, "$activity opens with no emoji: $line")
-                assertEquals("$emoji ${messages.progressLabel(activity)}", line)
-
-                emoji
-            }
-
-        assertEquals(emojis.size, emojis.toSet().size, "two activities share an emoji")
+        assertEquals(plain.size, plain.toSet().size, "two activities share an emoji")
+        assertEquals(custom.size, custom.toSet().size, "two activities share an animation")
     }
 
-    // the picture belongs to the activity, not the language.
+    // the picture belongs to the activity, not the language; without custom emoji it is the plain one, and the
+    // ellipsis is what says the work goes on
     @Test
     fun `the same activity carries the same emoji in every language`() {
-        assertEquals("🎨 Drawing", activityStatusLabel(ToolActivity.DRAWING, Messages.of(Language.ENGLISH)))
-        assertEquals("🎨 Малюю", activityStatusLabel(ToolActivity.DRAWING, Messages.of(Language.UKRAINIAN)))
+        assertEquals("🎨 Drawing…", icons.running(ToolActivity.DRAWING, Messages.of(Language.ENGLISH).progressLabel(ToolActivity.DRAWING), html = false))
+        assertEquals("🎨 Малюю…", icons.running(ToolActivity.DRAWING, Messages.of(Language.UKRAINIAN).progressLabel(ToolActivity.DRAWING), html = false))
     }
 }

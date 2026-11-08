@@ -154,6 +154,11 @@ internal object EnglishMessages : Messages {
         "↳ on the fallback model: <code>${model.escapeHtml()}</code>" +
                 primaryBackIn?.let { "\n↳ the usual one is back in about <b>${waitLabel(it)}</b>" }.orEmpty()
 
+    override fun progressDone(elapsed: Duration): String =
+        elapsed.toComponents { minutes, seconds, _ ->
+            if (minutes > 0) "Done in $minutes min $seconds s" else "Done in ${maxOf(seconds, 1)} s"
+        }
+
     override fun progressLabel(activity: ToolActivity): String =
 
         when (activity) {

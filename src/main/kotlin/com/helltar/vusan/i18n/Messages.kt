@@ -99,6 +99,9 @@ interface Messages {
      */
     fun progressLabel(activity: ToolActivity): String
 
+    /** The line over a finished turn's steps: how long the whole turn took. */
+    fun progressDone(elapsed: Duration): String
+
     /**
      * The status note while [model] stands in for the usual provider, with how long until it is back when the
      * provider said so. On its own line, since a model id wraps a phone-width bubble. HTML: the id is escaped
