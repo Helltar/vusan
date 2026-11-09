@@ -194,7 +194,11 @@ class ToolCatalogFactory(
 
     private val videoClient = xaiVideo?.let { XaiVideoClient(http, it, fileDownloadClient) }
 
-    private val sandboxClient =
+    /**
+     * The Regolith server's client, or null when none is configured. An adapter's own command reads a
+     * person's sandbox through it, so every reader shares one client and the server limits it keeps.
+     */
+    val sandboxClient: SandboxClient? =
         config.regolithUrl?.let {
             SandboxClient(http, it, requireNotNull(config.regolithToken))
         }

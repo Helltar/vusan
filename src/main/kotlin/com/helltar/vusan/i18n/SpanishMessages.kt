@@ -62,6 +62,16 @@ internal object SpanishMessages : Messages {
     override val tasksCommandDescription = "Gestionar tareas programadas"
     override val clearCommandDescription = "Borrar el historial de la conversación"
     override val stopCommandDescription = "Detener lo que estoy haciendo ahora"
+    override val sandboxCommandDescription = "Mostrar mi sandbox y mi sitio"
+
+    override val sandboxNoneReply = "Todavía no tienes un sandbox. Aparecerá la primera vez que ejecute o construya algo para ti"
+
+    override val sandboxNotPersonalReply =
+        "Un sandbox pertenece a una sola persona, y esto llegó desde una cuenta que usan muchas. Escribe desde la tuya"
+
+    override val sandboxUnavailableReply = "El sandbox no responde ahora mismo. Inténtalo un poco más tarde"
+
+    override val sandboxTitle = "Tu sandbox"
 
     override val ephemeralChatReply =
         "Esto solo lo vemos tú y yo, y yo respondo a la vista de todos. Escríbeme un mensaje normal"
@@ -108,6 +118,25 @@ internal object SpanishMessages : Messages {
 
     override fun taskMenuHiddenNotice(hidden: Int) =
         "<i>Otras $hidden no caben aquí — pregúntame por ellas con tus palabras.</i>"
+
+    override fun sandboxState(running: Boolean, commandsRunning: Int): String =
+        when {
+            !running -> "💤 Detenido, el próximo comando lo inicia"
+            commandsRunning > 0 -> "🟢 En marcha · comandos en curso: $commandsRunning"
+            else -> "🟢 En marcha"
+        }
+
+    override fun sandboxFilesKept(until: String, daysLeft: Long): String =
+        "📦 Los archivos se conservan hasta el $until (días restantes: $daysLeft). Cada uso mueve esa fecha"
+
+    override fun sandboxFilesReleased(on: String): String =
+        "📦 Los archivos se borraron el $on porque el sandbox no se usaba. El próximo comando empieza con uno vacío"
+
+    override fun sandboxSnapshots(count: Int, limit: Int?): String =
+        "📸 Instantáneas: $count" + limit?.let { " de $it" }.orEmpty()
+
+    override fun sandboxSite(url: String, files: Int, size: String, until: String, daysLeft: Long): String =
+        "🌐 Sitio: $url\nArchivos: $files · $size · en línea hasta el $until (días restantes: $daysLeft)"
 
     override fun taskRecurrenceEvery(interval: String) = "cada $interval"
 

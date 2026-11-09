@@ -1,6 +1,6 @@
 # Commands and buttons
 
-Flows that bypass the model or come back from a pressed button: `/tasks`, `/stop`, `/clear` and the agent's own
+Flows that bypass the model or come back from a pressed button: `/tasks`, `/stop`, `/clear`, `/sandbox` and the agent's own
 inline choices. Part of the [architecture index](../architecture.md).
 
 - **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
@@ -45,6 +45,18 @@ inline choices. Part of the [architecture index](../architecture.md).
   choices created before it. The command goes through `AgentRunner.clearConversation` so it waits for the
   conversation's turn lock; a turn already running would otherwise persist itself after the wipe. The persisted
   semantic recap is deleted with the raw transcript.
+- **Sandbox at a glance** — `/sandbox` bypasses the LLM and answers with the caller's own sandbox as the server
+  reports it: whether it is running and how many of their commands still are, the day its files go unless it is used
+  first, its snapshots with their notes, and their published site with its term. `SandboxClient.overviewReply` in
+  `telegram/SandboxOverview.kt` reads it through the same `SandboxClient` the tools use and only asks, so the command
+  never creates a sandbox for someone who has none; every date in the answer is the server's, and nothing here knows
+  how long anything is kept. The server gets eight seconds, because an ephemeral answer is refused after fifteen: past
+  that, or when it refuses, the answer is a canned apology rather than the server's sentence, which is written for the
+  model. A site the server will not report (it publishes nothing) leaves the rest of the answer standing. In a group
+  the answer is for the caller alone, like the task menu, and goes out in the open only for a plain command the bot
+  may not answer privately. A sender that is no single person (an anonymous admin, a linked channel) has no sandbox
+  and is told so. The command exists only where `REGOLITH_URL` is set: without it `/sandbox` is not recognized, not in
+  the menu and not in the system prompt, and reaches the agent as any other text.
 - **Agent-created inline choices** — `askWithButtons` enqueues a plain-text question plus two to ten answer buttons.
   Callback data carries the intended user id, history revision, option index, and the id of the user message the
   question was asked about; the labels remain in Telegram's message keyboard, while the current revision lives in

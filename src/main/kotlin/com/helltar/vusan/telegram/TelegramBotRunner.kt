@@ -55,6 +55,7 @@ import com.helltar.vusan.telegram.inbound.toAudioInput
 import com.helltar.vusan.telegram.inbound.toGroupLogEntry
 import com.helltar.vusan.telegram.inbound.toRichMarkdown
 import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
+import com.helltar.vusan.tools.sandbox.SandboxClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -98,13 +99,17 @@ internal class TelegramBotRunner(
     fallbackInUse: () -> FallbackInUse? = { null },
     // answers untagged group messages that are meant for the bot anyway; `null` is off.
     private val ambient: AmbientAddressing? = null,
-    private val sandbox: Boolean = false,
+    // the sandbox server's client where one is configured: `/sandbox` reads through it, and its presence is
+    // what the attachment blocks point the model to a sandbox by
+    private val sandboxClient: SandboxClient? = null,
     private val floor: ChatFloor = ChatFloor(),
     // where the bot api is served: telegram's own server, or a local one the bot was moved to
     private val telegramUrl: TelegramUrl = TelegramUrl.DEFAULT_URL,
     // shared with the task menu, so what one status learns about custom emoji holds for every button
     private val icons: InterfaceIcons = InterfaceIcons(),
 ) {
+
+    private val sandbox = sandboxClient != null
 
     private val heartbeat = Heartbeat()
 
@@ -115,7 +120,7 @@ internal class TelegramBotRunner(
 
     private val turnStop = TurnStopHandler(client, agent)
     private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, turns, accessPolicy)
-    private val commands = TelegramCommands(delivery, agent, taskMenu)
+    private val commands = TelegramCommands(delivery, agent, taskMenu, sandboxClient)
 
     private val answeredMessages = AnsweredMessages(ANSWERED_MEMORY)
 
@@ -180,7 +185,7 @@ internal class TelegramBotRunner(
         return scope.launch(Dispatchers.Default) {
             heartbeat.start()
 
-            client.publishCommandMenu()
+            client.publishCommandMenu(sandbox)
 
             // what the last run received and never handled. it queues behind the first poll, which only
             // affects answer order: a message seen on both paths is still claimed once, by

@@ -39,7 +39,8 @@ window, vision, database file, enabled tools. `TelegramBotRunner` closes it with
 the allowlist.
 
 The runner's first act is `publishCommandMenu` (`telegram/CommandMenu.kt`): a `setMyCommands` call per `Language`, so
-the menu Telegram shows follows `TelegramCommands` without an operator step. It writes the same list BotFather's
+the menu Telegram shows follows `TelegramCommands` without an operator step, `/sandbox` included only where a sandbox
+server is configured. It writes the same list BotFather's
 `/setcommands` edits, which means a manual edit there is replaced on the next start. A rejected call is a warning, not a
 failed startup — an out-of-date menu is not worth refusing to serve over.
 

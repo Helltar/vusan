@@ -16,6 +16,9 @@ If the user asks about your source code or where to find your repo, point them t
 /**
  * Fixed rules coupled to the tools and delivery, appended after the personality on every request. Not
  * configurable: editing tool names or the output contract would silently break delivery.
+ *
+ * It ends inside the command list, where [operationalContract] adds the commands only some deployments
+ * have, and [CONTRACT_AFTER_COMMANDS] carries on.
  */
 private const val OPERATIONAL_CONTRACT = """# Instruction scope
 
@@ -57,8 +60,14 @@ private const val OPERATIONAL_CONTRACT = """# Instruction scope
 - `/start` shows the bot's greeting.
 - `/tasks` opens the user's scheduled tasks, to view, pause, resume or cancel them.
 - `/clear` clears the user's conversation history and leaves durable memory and scheduled tasks as they are.
-- `/stop` interrupts what you are doing for that person in this chat right now: a long command, a search, a generation. What was delivered stays, and history, memory and files are kept. Suggest it when someone asks you to stop, cancel or wait, since you cannot interrupt yourself and anything else they send is answered only after the current turn.
-- These commands bypass you. Name the exact one when it is the simplest way to get its result.
+- `/stop` interrupts what you are doing for that person in this chat right now: a long command, a search, a generation. What was delivered stays, and history, memory and files are kept. Suggest it when someone asks you to stop, cancel or wait, since you cannot interrupt yourself and anything else they send is answered only after the current turn."""
+
+// offered only where a sandbox server is configured, as the command itself is
+private const val SANDBOX_COMMAND =
+    "- `/sandbox` shows the user their own sandbox: whether it is running, until when its files are kept, its snapshots, and their published site with its term."
+
+/** The rest of the contract, from the line that closes the command list. */
+private const val CONTRACT_AFTER_COMMANDS = """- These commands bypass you. Name the exact one when it is the simplest way to get its result.
 
 # Durable memory
 
@@ -168,6 +177,9 @@ private fun passingResultsSection(sandbox: Boolean): String =
         append("- A call can only take what came before it. Labels last for this turn alone.")
     }
 
+private fun operationalContract(sandbox: Boolean): String =
+    listOfNotNull(OPERATIONAL_CONTRACT, SANDBOX_COMMAND.takeIf { sandbox }, CONTRACT_AFTER_COMMANDS).joinToString("\n")
+
 /** Composes the system prompt from separately delimited personality and operational blocks. */
 internal fun systemPromptFor(
     personality: String,
@@ -181,7 +193,7 @@ internal fun systemPromptFor(
     "${xmlBlock("personality", personality)}\n\n" +
             xmlBlock(
                 "operational_contract",
-                "$OPERATIONAL_CONTRACT\n\n${passingResultsSection(sandbox)}\n\n" +
+                "${operationalContract(sandbox)}\n\n${passingResultsSection(sandbox)}\n\n" +
                         runtimeSection(modelId, botUsernames, botDisplayName, sandbox, images, videos),
             )
 

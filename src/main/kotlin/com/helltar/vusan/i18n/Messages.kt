@@ -39,6 +39,13 @@ interface Messages {
     val tasksCommandDescription: String
     val clearCommandDescription: String
     val stopCommandDescription: String
+    val sandboxCommandDescription: String
+
+    /** The `/sandbox` answers that are one sentence: nothing to show, nobody to show it to, no answer. */
+    val sandboxNoneReply: String
+    val sandboxNotPersonalReply: String
+    val sandboxUnavailableReply: String
+    val sandboxTitle: String
 
     /**
      * A reply to one of the bot's ephemeral answers, visible to the two of them only: the bot answers in the
@@ -64,6 +71,21 @@ interface Messages {
     fun taskMenuEmpty(currentChatOnly: Boolean): String
 
     fun taskMenuHiddenNotice(hidden: Int): String
+
+    /**
+     * The lines of the `/sandbox` answer, one fact each. A date is a day as the server keeps it, and what is
+     * left of a term is whole days. Counts follow a colon, which reads right for any number in every language.
+     */
+    fun sandboxState(running: Boolean, commandsRunning: Int): String
+
+    fun sandboxFilesKept(until: String, daysLeft: Long): String
+
+    fun sandboxFilesReleased(on: String): String
+
+    fun sandboxSnapshots(count: Int, limit: Int?): String
+
+    /** [url] arrives escaped for HTML; the line is sent as HTML. */
+    fun sandboxSite(url: String, files: Int, size: String, until: String, daysLeft: Long): String
 
     fun taskRecurrenceEvery(interval: String): String
 

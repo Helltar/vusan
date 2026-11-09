@@ -293,7 +293,7 @@ suspend fun main() = coroutineScope {
             TelegramBotRunner(
                 telegramClient, config.telegramBotToken, delivery, agentRunner, taskMenu, inlineChoices, tasks,
                 chatProfiles, config.accessPolicy, voiceTranscriber, botProfile, stickerCatalog,
-                groupLog, polls, fallbackInUse, ambient, sandbox = config.regolithUrl != null, floor = floor,
+                groupLog, polls, fallbackInUse, ambient, sandboxClient = toolCatalogFactory.sandboxClient, floor = floor,
                 telegramUrl = telegramUrl,
                 icons = interfaceIcons,
             )

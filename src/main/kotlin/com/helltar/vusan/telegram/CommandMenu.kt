@@ -19,6 +19,7 @@ private fun ephemeralCommand(command: String, description: String): BotCommand =
 internal const val TASKS_COMMAND = "tasks"
 internal const val CLEAR_COMMAND = "clear"
 internal const val STOP_COMMAND = "stop"
+internal const val SANDBOX_COMMAND = "sandbox"
 
 /**
  * Publishes the command menu telegram shows beside the input field, one list per [Language].
@@ -26,20 +27,22 @@ internal const val STOP_COMMAND = "stop"
  * It is the same list BotFather's `/setcommands` writes, so it is republished on every start and a BotFather
  * edit lasts only until the next one. Adding a command to `TelegramCommands` is all it takes to offer it.
  *
- * `/start` is left out on purpose: telegram opens a fresh chat with it anyway.
+ * `/start` is left out on purpose: telegram opens a fresh chat with it anyway. `/sandbox` is listed only
+ * where [sandbox] says a server is configured, which is where `TelegramCommands` answers it.
  */
-internal suspend fun TelegramClient.publishCommandMenu() {
+internal suspend fun TelegramClient.publishCommandMenu(sandbox: Boolean) {
     Language.entries.forEach { language ->
         val messages = Messages.of(language)
 
-        // the task menu and a clear are personal, so in a group they are ephemeral, seen by that person and
-        // the bot alone; clients hide ephemeral commands in private chats, so the private list has them
-        // plain. a stop stays in the open on purpose: the chat sees why the bot fell silent.
+        // the task menu, a clear and the sandbox are personal, so in a group they are ephemeral, seen by that
+        // person and the bot alone; clients hide ephemeral commands in private chats, so the private list has
+        // them plain. a stop stays in the open on purpose: the chat sees why the bot fell silent.
         fun commands(personal: (String, String) -> BotCommand): List<BotCommand> =
-            listOf(
+            listOfNotNull(
                 personal(TASKS_COMMAND, messages.tasksCommandDescription),
                 personal(CLEAR_COMMAND, messages.clearCommandDescription),
                 BotCommand(STOP_COMMAND, messages.stopCommandDescription),
+                personal(SANDBOX_COMMAND, messages.sandboxCommandDescription).takeIf { sandbox },
             )
 
         // the list without a language serves everyone whose language has no list of its own

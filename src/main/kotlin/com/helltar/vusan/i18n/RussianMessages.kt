@@ -61,6 +61,16 @@ internal object RussianMessages : Messages {
     override val tasksCommandDescription = "Управлять запланированными задачами"
     override val clearCommandDescription = "Очистить историю переписки"
     override val stopCommandDescription = "Остановить то, что я сейчас делаю"
+    override val sandboxCommandDescription = "Показать мою песочницу и сайт"
+
+    override val sandboxNoneReply = "У тебя ещё нет песочницы. Она появится, как только я впервые что-то для тебя запущу или соберу"
+
+    override val sandboxNotPersonalReply =
+        "Песочница принадлежит одному человеку, а это пришло с аккаунта, с которого пишут многие. Напиши со своего"
+
+    override val sandboxUnavailableReply = "Песочница сейчас не отвечает. Попробуй немного позже"
+
+    override val sandboxTitle = "Твоя песочница"
 
     override val ephemeralChatReply = "Это видим только мы с тобой, а отвечаю я всем. Напиши мне обычным сообщением"
 
@@ -106,6 +116,25 @@ internal object RussianMessages : Messages {
 
     override fun taskMenuHiddenNotice(hidden: Int) =
         "<i>Ещё $hidden сюда не поместилось — просто спроси о них своими словами.</i>"
+
+    override fun sandboxState(running: Boolean, commandsRunning: Int): String =
+        when {
+            !running -> "💤 Остановлена, следующая команда её запустит"
+            commandsRunning > 0 -> "🟢 Работает · команд выполняется: $commandsRunning"
+            else -> "🟢 Работает"
+        }
+
+    override fun sandboxFilesKept(until: String, daysLeft: Long): String =
+        "📦 Файлы хранятся до $until (осталось дней: $daysLeft). Каждое использование отодвигает эту дату"
+
+    override fun sandboxFilesReleased(on: String): String =
+        "📦 Файлы удалены $on, потому что песочницей не пользовались. Следующая команда начнёт с пустой"
+
+    override fun sandboxSnapshots(count: Int, limit: Int?): String =
+        "📸 Снимков: $count" + limit?.let { " из $it" }.orEmpty()
+
+    override fun sandboxSite(url: String, files: Int, size: String, until: String, daysLeft: Long): String =
+        "🌐 Сайт: $url\nФайлов: $files · $size · онлайн до $until (осталось дней: $daysLeft)"
 
     override fun taskRecurrenceEvery(interval: String) = "каждые $interval"
 

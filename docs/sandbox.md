@@ -93,6 +93,9 @@ Every command is a fresh shell starting at the home.
   nothing is lost between reads.
 - **Canceling** — stops that command and every process it started, background servers included.
 - **History outlives the chat** — recent commands can be listed even after `/clear`.
+- **`/sandbox`** — shows a person their own sandbox without a turn of the agent: whether it is running,
+  until when its files are kept, its snapshots and their published site with its term. In a group
+  only they see the answer.
 - **A killed command says why** — `out of memory`, or the process limit, instead of a bare exit code.
   A command the session ended under says why it ended, and what to do differently when the cause was
   a command's own — a `pkill` that took the session down, background jobs left to fill the process

@@ -13,7 +13,7 @@ turn starts from. Next: [running a turn](turn.md).
    typed as several messages — are buffered the same way (`LINES_QUIET_PERIOD`, per sender, chat and topic) and, when
    any of them calls the bot, answered as one turn under the last of them (`handleTextBatch`); a run nobody addressed
    is handled line by line as before, so ambient addressing judges what it always did. A command, a reply, a forward or
-   a media message from that person flushes their waiting lines first, so nothing is answered out of order. `/start`, `/tasks`, `/clear` and `/stop` take direct paths in `TelegramCommands` that never enter the agent
+   a media message from that person flushes their waiting lines first, so nothing is answered out of order. `/start`, `/tasks`, `/clear`, `/stop` and `/sandbox` take direct paths in `TelegramCommands` that never enter the agent
    loop, once the runner has accepted the message like any other; so do task-menu callback queries. Every pressed button reaches `CallbackRouter`,
    which rechecks the allowlist and picks the flow: an agent-created inline-choice callback is validated and consumed by
    `InlineChoiceHandler`, and its selected option then enters the agent loop as the user's next turn. Callback data no
@@ -51,7 +51,7 @@ turn starts from. Next: [running a turn](turn.md).
    only replies, mentions, or targeted commands), and past it `isAccepted` claims the message in `AnsweredMessages`; a
    message already claimed is dropped with a warning, because Telegram hands the same one over more than once — as an
    edit of it, and as a plain redelivery under a fresh update id, which the polling session's own duplicate filter does
-   not catch. An ephemeral command — `/tasks` or `/clear` in a group, sent so by a client that knows them as such — has no message id, so `shouldHandle` takes
+   not catch. An ephemeral command — `/tasks`, `/clear` or `/sandbox` in a group, sent so by a client that knows them as such — has no message id, so `shouldHandle` takes
    it as addressed, `isAccepted` does not dedupe it and the group log skips it; a reply to the bot's ephemeral answer
    is ephemeral itself, and `dispatch` turns any ephemeral message that is not a command into a private note to write
    in the open (`TelegramDelivery.sendForSenderOnly`), since the agent's own delivery is not ephemeral and a public

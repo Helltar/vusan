@@ -21,7 +21,7 @@ searching the tree.
 - [Scheduled work](architecture/scheduling.md) — the task scheduler, maintenance, and the agent's own follow-ups.
 - [Group flows](architecture/groups.md) — the group log, diary, initiative, poll answers and the sticker
   catalog.
-- [Commands and buttons](architecture/commands.md) — `/tasks`, `/stop`, `/clear` and agent-created inline
+- [Commands and buttons](architecture/commands.md) — `/tasks`, `/stop`, `/clear`, `/sandbox` and agent-created inline
   choices.
 - [Context budget](architecture/context.md) — history compaction and the live budget for tool results.
 - [Model providers](architecture/models.md) — provider resolution, the fallback, and the ChatGPT subscription.
@@ -111,6 +111,7 @@ A symptom-to-source map for finding the right file fast. Paths are under
 | A conversation loads the same group on every turn, or keeps offering one it no longer uses | `tools/LoadedToolGroups.kt` (per-scope memory, its cap and its LRU order) — it is process memory, so a restart empties it |
 | `/tasks` or a plain-language task pause/resume/cancel fails | `telegram/callback/TaskMenuHandler.kt` (rendering, ownership, callbacks) + `tools/tasks/TaskTools.kt` (agent path) + `tasks/TasksRepository.kt` (shared scoped state changes) |
 | `/stop` does not stop anything, or a turn leaves its status message on screen | `agent/RunningTurns.kt` (what is registered and canceled) + `agent/AgentRunner.kt` (`stop`, and the lock the command must not take) + `telegram/AgentTurns.kt` (the notice on cancellation) + `telegram/TelegramProgress.kt` (closing the status on the way out) + `telegram/callback/TurnStopHandler.kt` (the button and whose turn it may stop) |
+| `/sandbox` answers that the sandbox is not answering, or is missing from the menu | `telegram/SandboxOverview.kt` (`overviewReply`: the eight-second wait, and the `no sandbox overview` log line with the server's reason) + `telegram/CommandMenu.kt` (listed only with `REGOLITH_URL`) |
 | `/clear` reports success but history survives | `agent/AgentRunner.kt` (`clearConversation` and the turn lock that also guards the append) + `agent/conversation/ConversationRepository.kt` (shared storage operation) |
 | An agent choice button does nothing, repeats, reaches the wrong user, loses the photo, or its answer replies to the bot's own question | `tools/choice/InlineChoiceTools.kt` (tool contract) + `telegram/callback/InlineChoiceHandler.kt` (callback ownership/consumption, origin message id, parked attachment) + `telegram/AgentTurns.kt` (the follow-up turn and its reply anchor) |
 | An env var has no effect | `config/AppConfig.kt` (parsing) — and check it is documented in [`configuration.md`](configuration.md) + [`.env.example`](../.env.example) |

@@ -12,20 +12,23 @@ import com.helltar.vusan.telegram.delivery.sendEphemeralWithAnchorFallback
 import com.helltar.vusan.telegram.inbound.BotCommand
 import com.helltar.vusan.telegram.inbound.chatIdLong
 import com.helltar.vusan.telegram.inbound.isEphemeral
+import com.helltar.vusan.telegram.inbound.isPerson
 import com.helltar.vusan.telegram.inbound.isPrivateChat
 import com.helltar.vusan.telegram.inbound.language
 import com.helltar.vusan.telegram.inbound.messageIdLong
 import com.helltar.vusan.telegram.inbound.normalizeUsername
 import com.helltar.vusan.telegram.inbound.normalizedUsernames
 import com.helltar.vusan.telegram.inbound.senderIdOrNull
+import com.helltar.vusan.tools.sandbox.SandboxClient
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Instant
 import org.telegram.telegrambots.meta.api.objects.ephemeral.EphemeralMessageParameters
 import org.telegram.telegrambots.meta.api.objects.message.Message
 
 /**
- * The slash commands that skip the agent loop: `/start`, `/tasks`, `/clear` and `/stop`. The runner hands
- * over a message already accepted (allowlisted, addressed, claimed), so this only does what the command says.
+ * The slash commands that skip the agent loop: `/start`, `/tasks`, `/clear`, `/stop` and, where a sandbox
+ * server is configured, `/sandbox`. The runner hands over a message already accepted (allowlisted, addressed,
+ * claimed), so this only does what the command says.
  *
  * The source of truth for which commands exist: the menu [publishCommandMenu] writes and the system prompt's
  * `Telegram commands` section follow it.
@@ -34,11 +37,16 @@ internal class TelegramCommands(
     private val delivery: TelegramDelivery,
     private val agent: AgentRunner,
     private val taskMenu: TaskMenuHandler,
+    // null where no sandbox server is configured: `/sandbox` is then no command at all, and reaches the agent
+    // as any other text
+    private val sandbox: SandboxClient? = null,
 ) {
+
+    private val names = NAMES + listOfNotNull(SANDBOX_COMMAND.takeIf { sandbox != null })
 
     /** Whether [command] is one of these and for this bot: `/stop@other_bot` in a group is not. */
     fun recognizes(command: BotCommand, profile: BotProfile): Boolean =
-        command.command in NAMES &&
+        command.command in names &&
                 (command.targetUsername == null || normalizeUsername(command.targetUsername) in profile.usernames.normalizedUsernames())
 
     suspend fun handle(command: BotCommand, message: Message) {
@@ -54,6 +62,7 @@ internal class TelegramCommands(
             TASKS_COMMAND -> sendTaskMenu(message)
             CLEAR_COMMAND -> clear(message)
             STOP_COMMAND -> stop(message)
+            SANDBOX_COMMAND -> sandbox?.let { sendSandboxOverview(it, message) }
         }
     }
 
@@ -161,6 +170,39 @@ internal class TelegramCommands(
             .onFailure { error ->
                 error.rethrowIfCancellation()
                 log.warn { "could not confirm an ephemeral /clear in chat=${message.chatIdLong} user=$userId: ${error.message}" }
+            }
+    }
+
+    private suspend fun sendSandboxOverview(client: SandboxClient, message: Message) {
+        val sender =
+            message.from ?: run {
+                log.warn { "skipping /sandbox without sender user (chat=${message.chatIdLong})" }
+                return
+            }
+
+        val messages = Messages.of(message.language)
+
+        // a sandbox is filed under one person, which the account anonymous admins and channels share is not
+        val text = if (sender.isPerson) client.overviewReply(sender.id, messages) else messages.sandboxNotPersonalReply
+
+        if (message.isPrivateChat) {
+            delivery.sendReply(message, text)
+            return
+        }
+
+        // in a group it is that person's business, as their tasks are: for their eyes where telegram allows
+        // it, and in the open for a client that sent the command plain to a bot that is no administrator
+        runCatching { delivery.sendForSenderOnly(message, text) }
+            .onFailure { error ->
+                error.rethrowIfCancellation()
+
+                if (message.isEphemeral) {
+                    log.warn { "no answer to an ephemeral /sandbox in chat=${message.chatIdLong} user=${sender.id}: ${error.message}" }
+                    return
+                }
+
+                log.info { "no ephemeral /sandbox answer in chat=${message.chatIdLong} for user=${sender.id}: ${error.message}" }
+                delivery.sendReply(message, text)
             }
     }
 

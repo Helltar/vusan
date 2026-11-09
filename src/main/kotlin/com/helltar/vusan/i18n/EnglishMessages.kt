@@ -60,6 +60,16 @@ internal object EnglishMessages : Messages {
     override val tasksCommandDescription = "Manage scheduled tasks"
     override val clearCommandDescription = "Clear conversation history"
     override val stopCommandDescription = "Stop what I am doing right now"
+    override val sandboxCommandDescription = "Show my sandbox and site"
+
+    override val sandboxNoneReply = "You have no sandbox yet. It appears the first time I run or build something for you"
+
+    override val sandboxNotPersonalReply =
+        "A sandbox belongs to one person, and this came from an account many people write from. Write from your own"
+
+    override val sandboxUnavailableReply = "The sandbox is not answering right now. Try again a little later"
+
+    override val sandboxTitle = "Your sandbox"
 
     override val ephemeralChatReply =
         "Only the two of us can see this, and I answer in the open. Write me a regular message"
@@ -106,6 +116,25 @@ internal object EnglishMessages : Messages {
 
     override fun taskMenuHiddenNotice(hidden: Int) =
         "<i>$hidden more didn't fit here — just ask me about them in your own words.</i>"
+
+    override fun sandboxState(running: Boolean, commandsRunning: Int): String =
+        when {
+            !running -> "💤 Stopped, the next command starts it"
+            commandsRunning > 0 -> "🟢 Running · commands in progress: $commandsRunning"
+            else -> "🟢 Running"
+        }
+
+    override fun sandboxFilesKept(until: String, daysLeft: Long): String =
+        "📦 Files are kept until $until (days left: $daysLeft). Every use moves that date"
+
+    override fun sandboxFilesReleased(on: String): String =
+        "📦 The files were deleted on $on after the sandbox went unused. The next command starts an empty one"
+
+    override fun sandboxSnapshots(count: Int, limit: Int?): String =
+        "📸 Snapshots: $count" + limit?.let { " of $it" }.orEmpty()
+
+    override fun sandboxSite(url: String, files: Int, size: String, until: String, daysLeft: Long): String =
+        "🌐 Site: $url\nFiles: $files · $size · online until $until (days left: $daysLeft)"
 
     override fun taskRecurrenceEvery(interval: String) = "every $interval"
 

@@ -49,7 +49,7 @@ How they run:
   indicator. Only when the queue is several times the limit does Vusan say it is overloaded.
 - **Scheduled tasks** — always wait instead of being refused, since refusing one would skip the run.
 - **`/stop`** — ends a running answer, and stays visible in a group so the chat sees why Vusan went
-  quiet; `/tasks` and `/clear` there are seen only by whoever used them.
+  quiet; `/tasks`, `/clear` and `/sandbox` there are seen only by whoever used them.
 
 ## In a group
 

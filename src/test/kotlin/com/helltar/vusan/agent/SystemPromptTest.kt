@@ -113,6 +113,19 @@ class SystemPromptTest {
         assertContains(prompt, "These commands bypass you")
     }
 
+    @Test
+    fun `the sandbox command is named only where there is a sandbox`() {
+        val line = "- `/sandbox` shows the user their own sandbox"
+
+        val with = systemPromptFor("Custom personality", MODEL_ID, sandbox = true)
+        assertContains(with, "$line")
+        assertTrue(with.indexOf("`/stop` interrupts") < with.indexOf(line) && with.indexOf(line) < with.indexOf("These commands bypass you"))
+
+        val without = systemPromptFor("Custom personality", MODEL_ID)
+        assertFalse(line in without)
+        assertContains(without, "current turn.\n- These commands bypass you")
+    }
+
     // said outright: a model told only to format in html answered in markdown fences with a bare `<`, which
     // the parse mode refuses
     @Test
