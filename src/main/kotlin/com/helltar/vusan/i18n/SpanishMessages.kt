@@ -136,7 +136,7 @@ internal object SpanishMessages : Messages {
         "📸 Instantáneas: $count" + limit?.let { " de $it" }.orEmpty()
 
     override fun sandboxSite(url: String, files: Int, size: String, until: String, daysLeft: Long): String =
-        "🌐 Sitio: $url\nArchivos: $files · $size · en línea hasta el $until (días restantes: $daysLeft)"
+        "🌐 Sitio: $url\n↳ Archivos: $files · $size · en línea hasta el $until (días restantes: $daysLeft)"
 
     override fun taskRecurrenceEvery(interval: String) = "cada $interval"
 

@@ -134,7 +134,7 @@ internal object EnglishMessages : Messages {
         "📸 Snapshots: $count" + limit?.let { " of $it" }.orEmpty()
 
     override fun sandboxSite(url: String, files: Int, size: String, until: String, daysLeft: Long): String =
-        "🌐 Site: $url\nFiles: $files · $size · online until $until (days left: $daysLeft)"
+        "🌐 Site: $url\n↳ Files: $files · $size · online until $until (days left: $daysLeft)"
 
     override fun taskRecurrenceEvery(interval: String) = "every $interval"
 

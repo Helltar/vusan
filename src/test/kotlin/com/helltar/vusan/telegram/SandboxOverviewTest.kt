@@ -80,12 +80,13 @@ class SandboxOverviewTest {
         assertEquals(
             """
             <b>Your sandbox</b>
+
             💤 Stopped, the next command starts it
             📦 Files are kept until 2026-10-13 (days left: 10). Every use moves that date
             📸 Snapshots: 1 of 5
               • 2026-09-13 · 50.0 MB · before &lt;the&gt; upgrade
             🌐 Site: https://k7m2q9xwtp.example.test
-            Files: 3 · 2 KB · online until 2026-10-13 (days left: 10)
+            ↳ Files: 3 · 2 KB · online until 2026-10-13 (days left: 10)
             """.trimIndent(),
             text,
         )
@@ -132,8 +133,10 @@ class SandboxOverviewTest {
         Language.entries.forEach { language ->
             val text = reply(client(state = "running", execs = """{"execs":[$RUNNING_EXEC]}"""), Messages.of(language))
 
-            assertEquals(7, text.lines().size, "$language: $text")
-            assertTrue(text.lines().none { it.isBlank() }, "$language: $text")
+            // the title, a blank line, five facts and the site's second line under its arrow
+            assertEquals(8, text.lines().size, "$language: $text")
+            assertEquals(1, text.lines().count { it.isBlank() }, "$language: $text")
+            assertTrue(text.lines().last().startsWith("↳ "), "$language: $text")
         }
     }
 }

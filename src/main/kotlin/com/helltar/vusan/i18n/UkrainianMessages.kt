@@ -135,7 +135,7 @@ internal object UkrainianMessages : Messages {
         "📸 Знімків: $count" + limit?.let { " з $it" }.orEmpty()
 
     override fun sandboxSite(url: String, files: Int, size: String, until: String, daysLeft: Long): String =
-        "🌐 Сайт: $url\nФайлів: $files · $size · онлайн до $until (залишилось днів: $daysLeft)"
+        "🌐 Сайт: $url\n↳ Файлів: $files · $size · онлайн до $until (залишилось днів: $daysLeft)"
 
     override fun taskRecurrenceEvery(interval: String) = "кожні $interval"
 

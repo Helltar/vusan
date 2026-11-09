@@ -65,12 +65,13 @@ internal suspend fun SandboxClient.overviewReply(userId: Long, messages: Message
 }
 
 /**
- * The answer as HTML, one fact a line. Every date and number in it is the server's: nothing here knows how
+ * The answer as HTML: the title, then one fact a line. Every date and number in it is the server's: nothing here knows how
  * long a home or a site is kept, only when this one goes.
  */
 internal fun SandboxOverview.render(messages: Messages, now: Instant): String =
     buildString {
         appendLine("<b>${messages.sandboxTitle}</b>")
+        appendLine()
         appendLine(messages.sandboxState(status.running, commandsRunning))
 
         // retention took the files while a site kept the sandbox, so there is no date left to count down to
