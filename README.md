@@ -4,22 +4,25 @@
 
 <h1 align="center">Vusan</h1>
 
+<p align="center">An AI agent that lives in Telegram and is at its best in a group.</p>
+
 <p align="center">
   <a href="https://github.com/Helltar/vusan/actions/workflows/build.yml"><img src="https://github.com/Helltar/vusan/actions/workflows/build.yml/badge.svg" alt="build"></a>
   <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2FHelltar%2Fvusan%2Fmaster%2Fgradle%2Flibs.versions.toml&query=%24.versions.kotlin&logo=kotlin&label=kotlin&color=blue" alt="Kotlin"></a>
   <a href="https://github.com/Helltar/vusan/pkgs/container/vusan"><img src="https://img.shields.io/badge/ghcr-vusan-blue?logo=docker" alt="GHCR"></a>
 </p>
 
-Vusan is an AI agent that lives in Telegram and is at its best in a group. It follows the
-conversation, knows who said what, remembers yesterday, and joins in like one more member. In a
-private chat it works the same, and everywhere it picks its own tools: search, code, voice, images,
-and more.
+<p align="center">
+  Try it live in the <a href="https://t.me/+56qi5dDwsNszZWFi">Vusan Playground</a> Telegram group.
+</p>
 
-Try it live in the [Vusan Playground](https://t.me/+56qi5dDwsNszZWFi) Telegram group.
+Vusan follows the conversation, knows who said what, remembers yesterday, and joins in like one more
+member. In a private chat it works the same, and everywhere it picks its own tools: search, code,
+voice, images, and more.
 
 ## Quick start
 
-The bot runs from its published image, so it needs only the compose file and the env template:
+Vusan runs from its published image, so it needs only the compose file and the env template:
 
 ```bash
 mkdir -p vusan/data && cd vusan && curl -fsSLO \
@@ -27,8 +30,7 @@ mkdir -p vusan/data && cd vusan && curl -fsSLO \
   mv .env.example .env
 ```
 
-Only these values in `.env` are required to start; everything else is optional and covered in
-[configuration.md](docs/configuration.md):
+Fill in these five values in `.env`:
 
 ```dotenv
 OWNER_ID=123456789
@@ -38,15 +40,20 @@ LLM_MODEL=gpt-6.1-sol
 LLM_API_KEY=sk-proj-qwerty
 ```
 
-Then start it:
+And start it:
 
 ```bash
 docker compose up -d
 ```
 
-That is the whole deployment. The [sandbox shell](docs/sandbox.md) and
-[publishing to the web](docs/sites.md) stay off until the bot can reach a Regolith server — a separate
-project that runs the commands the model writes, best kept on a machine of its own.
+That is the whole deployment. The model can come from OpenAI, Anthropic, Google, DeepSeek, xAI,
+OpenRouter, any OpenAI-compatible server such as Ollama, or a ChatGPT subscription instead of an API
+key: see [LLM provider](docs/configuration.md#llm-provider). Everything else is optional and covered
+in [configuration.md](docs/configuration.md).
+
+The [sandbox shell](docs/sandbox.md) and [publishing to the web](docs/sites.md) stay off until Vusan
+can reach a Regolith server, a separate project that runs the commands the model writes and is best
+kept on a machine of its own.
 
 ### Add it to a group
 
@@ -61,15 +68,15 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 
 - **Called by name** — answers when you say its name or follow up, no mention needed.
 - **Speaks up on its own** — now and then reacts, drops a line or a sticker, or asks after someone.
-- **What the group said** — recaps the whole conversation, answers questions about who said what and finds when something came up.
-- **Diary** — writes down what each day in a group was like, looks back over its weeks and months, and picks up yesterday's thread or one from months ago.
+- **What the group said** — recaps the chat, answers who said what, and finds when something came up.
+- **Diary** — writes down what each day was like and picks up a thread from yesterday or months ago.
 - **Each person apart** — everyone in a chat keeps their own conversation, memory and sandbox.
 - **Replies** — reads the message you reply to, other people's files and pictures included.
 - **Private replies** — moves the answer into your DMs when you ask.
 - **Leaves you be** — stops writing to you on its own when you ask, until you say otherwise.
 - **Stickers** — learns your chat's sticker collection and picks fitting replies from it.
-- **Forum topics** — answers, notices and scheduled reminders stay in the topic they belong to; as an admin it opens, renames, closes and reopens topics when asked.
-- **Group settings** — shows the group's current photo or works from it, and as an admin changes the group's photo, title or description when someone who may do it asks.
+- **Forum topics** — keeps answers and reminders in their topic, and as an admin manages the topics.
+- **Group settings** — shows the group's photo, and as an admin changes its photo, title or description.
 
 ### Understands what you send
 
@@ -83,34 +90,30 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 - **Links** — reads a web page you send and answers from it.
 - **Image search** — finds pictures on the web and sends them.
 - **Telegram channels** — recaps and searches public channel posts, pictures included.
-- **YouTube video and audio** — finds videos by name or link and sends the video or audio track.
-- **YouTube transcripts** — summarizes videos and answers questions using their subtitles.
+- **YouTube** — finds a video by name or link, sends its video or audio, and answers from its subtitles.
 
 ### Creates
 
-- **Its own sandbox** — a private Linux home per person for code, projects, media and data, with snapshots to roll back to.
+- **Its own sandbox** — a private Linux home per person for code, media and data, with snapshots.
 - **One job, many tools** — chains its tools, like putting itself into your video and voicing it.
-- **Web pages** — publishes a page, game or small app it built at your own address, and keeps it up longer when asked.
+- **Web pages** — publishes a page, game or app it built at your own address, kept up longer on request.
 - **Images** — draws from descriptions, edits your pictures, merges several into one, and draws GIFs.
-- **Video clips** — makes short videos with sound, brings your photos to life, and edits or extends a clip.
+- **Video clips** — makes short videos with sound, animates your photos, and edits or extends a clip.
 - **Voice replies** — answers out loud with voice messages.
 - **Round video messages** — replies with its own face and voice in a video circle.
 - **GIFs, memes and clips** — finds a fitting GIF, meme or clip, or turns your video into a GIF.
 
 ### In the chat
 
-- **Live progress** — shows what it is doing and the steps already done, sends early results while a long job runs, and keeps how long a planned job took.
+- **Live progress** — shows each step as it works, sends early results, and keeps how long a job took.
 - **Stop button** — ends a running answer from the progress message, in groups too.
-- **Sandbox at a glance** — shows your sandbox, its snapshots and your site, and until when each is kept.
 - **Inline choices** — asks for decisions or confirmation with buttons and continues when you tap.
-- **Edits** — answers when you add its mention, or its name, to an earlier message.
-
-### Speaks Telegram
-
 - **Reactions** — sometimes an emoji on your message is the whole answer.
 - **Polls and quizzes** — creates polls and quizzes, and follows who answered what.
 - **Files** — sends documents, downloads links, and fetches the file behind a sticker or picture.
 - **Long structured answers** — formats longer replies with headings, tables, and checklists.
+- **Edits** — answers when you add its mention, or its name, to an earlier message.
+- **Sandbox at a glance** — shows your sandbox, its snapshots and your site, and until when each is kept.
 
 ### Remembers
 
@@ -154,6 +157,4 @@ Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
 ## Stack
 
 Kotlin, with [TelegramBots](https://github.com/rubenlagus/TelegramBots) for Telegram, Exposed/SQLite
-for storage, and its own thin clients for the model providers' APIs. Works with OpenAI, Anthropic,
-Google, DeepSeek, xAI, OpenRouter, any OpenAI-compatible server (Ollama and others), or a ChatGPT subscription
-instead of a paid API key — see [configuration.md](docs/configuration.md#llm-provider).
+for storage, and its own thin clients for the model providers' APIs.
