@@ -141,6 +141,13 @@ Use the original photo when you have it: Telegram serves avatars at 640×640, an
 the image model more to hold on to. Keep the notes to a few sentences. Only the image model reads
 them, so if the agent should describe its looks in words, put that in the personality too.
 
+## Interface icons
+
+Live progress, the stop button and the task menu draw their icons as custom emoji from the public
+pack [vusan_ui_by_VusanAgent](https://t.me/addemoji/vusan_ui_by_VusanAgent). Telegram lets a bot send
+custom emoji only while its owner has Telegram Premium. Without it nothing needs setting: Vusan
+notices on the first status it sends and keeps plain emoji until a restart.
+
 ## Optional tools
 
 Each optional tool is switched on by one variable. Without it, the tool is left out and the startup
