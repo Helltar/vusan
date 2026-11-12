@@ -119,7 +119,28 @@ class TaskMenuHandlerTest {
 
         val items = assertIs<SendMessage>(client.requests.single()).text.split("\n\n")
         assertContains(items.single { "#$privateId ·" in it }, "✉️ Sent privately\n🟢 Active")
-        assertFalse(items.single { "#$groupId ·" in it }.contains("✉️"))
+        assertFalse(items.single { "#$groupId ·" in it }.contains("Sent"))
+    }
+
+    // everything that arrives in the private chat looks the same there, wherever it was set up.
+    @Test
+    fun `the private menu marks only the task that writes to its group`() = runBlocking {
+        val privateId = createTask(userId = 100L, chatId = 100L, title = "morning brief")
+        val deliveredHereId = createTask(userId = 100L, chatId = -200L, title = "outage chart", deliverPrivately = true)
+        val groupId = createTask(userId = 100L, chatId = -200L, title = "news digest")
+
+        handler.sendMenu(
+            target = ChatTarget(100L),
+            userId = 100L,
+            replyParameters = replyParameters(55L),
+            chatIsPrivate = true,
+            messages = Messages.of(Language.ENGLISH),
+        )
+
+        val items = assertIs<SendMessage>(client.requests.single()).text.split("\n\n")
+        assertContains(items.single { "#$groupId ·" in it }, "👥 Sent to its group\n🟢 Active")
+        assertFalse(items.single { "#$privateId ·" in it }.contains("Sent"))
+        assertFalse(items.single { "#$deliveredHereId ·" in it }.contains("Sent"))
     }
 
     @Test

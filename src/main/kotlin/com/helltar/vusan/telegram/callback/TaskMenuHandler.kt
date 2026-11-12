@@ -4,6 +4,7 @@ import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.escapeHtml
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.i18n.TaskDeliveryElsewhere
 import com.helltar.vusan.tasks.Recurrence
 import com.helltar.vusan.tasks.ScheduledTask
 import com.helltar.vusan.tasks.TasksRepository
@@ -240,7 +241,7 @@ internal class TaskMenuHandler(
         // follow-ups are listed below with their own limit.
         val totalTasks = tasks.countForUser(telegramUser(userId), selfInitiated = false)
 
-        val shownTasks = listedTasks.fittingInMenu(messages)
+        val shownTasks = listedTasks.fittingInMenu(messages, currentChatOnly)
         val hiddenTasks = listedTasks.size - shownTasks.size
 
         val text =
@@ -316,7 +317,7 @@ internal class TaskMenuHandler(
 
     // renders items while they fit, always at least one, so an oversized task cannot make the menu look
     // empty; the rest stays reachable through the task tools.
-    private fun List<ScheduledTask>.fittingInMenu(messages: Messages): List<MenuItem> {
+    private fun List<ScheduledTask>.fittingInMenu(messages: Messages, currentChatOnly: Boolean): List<MenuItem> {
         val fitting = mutableListOf<MenuItem>()
         var used = 0
 
@@ -331,7 +332,7 @@ internal class TaskMenuHandler(
                             nextFire = task.menuFireHtml(),
                             recurrence = task.recurrence.menuHtml(messages),
                             paused = task.paused,
-                            deliverPrivately = task.deliverPrivately,
+                            deliversElsewhere = task.deliversElsewhere(currentChatOnly),
                         ),
                 )
 
@@ -345,6 +346,15 @@ internal class TaskMenuHandler(
 
         return fitting
     }
+
+    // a mark only where the answer goes somewhere else than the chat showing the menu: a group lists its own
+    // tasks, a private chat every task of its owner.
+    private fun ScheduledTask.deliversElsewhere(shownInGroup: Boolean): TaskDeliveryElsewhere? =
+        when {
+            shownInGroup -> TaskDeliveryElsewhere.PRIVATE_CHAT.takeIf { deliverPrivately }
+            chatIsPrivate || deliverPrivately -> null
+            else -> TaskDeliveryElsewhere.GROUP
+        }
 
     private fun ScheduledTask.menuLabel(): String =
         title

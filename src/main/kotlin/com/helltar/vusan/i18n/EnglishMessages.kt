@@ -146,13 +146,19 @@ internal object EnglishMessages : Messages {
         nextFire: String,
         recurrence: String,
         paused: Boolean,
-        deliverPrivately: Boolean,
+        deliversElsewhere: TaskDeliveryElsewhere?,
     ): String =
         buildString {
             append("<b>#$id · $label</b>\n")
             append("🕒 $nextFire\n")
             append("🔁 $recurrence\n")
-            if (deliverPrivately) append("✉️ Sent privately\n")
+
+            when (deliversElsewhere) {
+                TaskDeliveryElsewhere.PRIVATE_CHAT -> append("✉️ Sent privately\n")
+                TaskDeliveryElsewhere.GROUP -> append("👥 Sent to its group\n")
+                null -> Unit
+            }
+
             append(if (paused) "⏸️ Paused" else "🟢 Active")
         }
 

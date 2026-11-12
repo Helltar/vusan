@@ -91,13 +91,14 @@ interface Messages {
 
     fun taskRecurrenceCron(expression: String): String
 
+    /** [deliversElsewhere] names where the task writes when that is not the chat the menu is shown in. */
     fun taskMenuItem(
         id: Long,
         label: String,
         nextFire: String,
         recurrence: String,
         paused: Boolean,
-        deliverPrivately: Boolean,
+        deliversElsewhere: TaskDeliveryElsewhere?,
     ): String
 
     fun taskMenuPauseButton(id: Long): String
@@ -150,4 +151,14 @@ interface Messages {
 
         fun forCode(code: String?): Messages = of(Language.fromCode(code))
     }
+}
+
+/** Where a task writes, for a menu shown in another chat than that one. */
+enum class TaskDeliveryElsewhere {
+
+    /** Its owner's private chat, seen from the group the task lives in. */
+    PRIVATE_CHAT,
+
+    /** The group the task lives in, seen from its owner's private chat. */
+    GROUP
 }

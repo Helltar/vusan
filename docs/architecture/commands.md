@@ -4,7 +4,9 @@ Flows that bypass the model or come back from a pressed button: `/tasks`, `/stop
 inline choices. Part of the [architecture index](../architecture.md).
 
 - **Task menu** — `/tasks` bypasses the LLM and asks `TaskMenuHandler` to render the caller's enabled tasks. Private
-  chats show all of that user's tasks; groups show only their tasks created in that chat, as an ephemeral message for
+  chats show all of that user's tasks; a task is marked only when it writes somewhere other than the chat showing the
+  menu (`TaskDeliveryElsewhere`: privately, seen from its group; to its group, seen from the private chat). Groups
+  show only their tasks created in that chat, as an ephemeral message for
   the caller alone (the open menu when Telegram refuses one: a client that does not yet know the command is ephemeral
   sends it plain, and only an administrator may answer a plain message for one person's eyes), whose buttons then edit
   it through `editEphemeralMessageText` — `EditableMessage` in
