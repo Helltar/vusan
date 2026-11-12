@@ -18,6 +18,7 @@ import com.helltar.vusan.i18n.Messages
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.request.RequestContext
+import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.api
 import com.helltar.vusan.telegram.telegramChatId
@@ -159,12 +160,20 @@ class TelegramDelivery(
 
     private enum class ItemDeliveryOutcome { Ok, ReplyMissing, PrivateBlocked, ChatUnreachable, Unanswered, Failed }
 
-    private data class DispatchOutcome(val replyUnavailable: Boolean, val chatUnreachable: Boolean) {
+    private data class DispatchOutcome(
+        val replyUnavailable: Boolean,
+        val chatUnreachable: Boolean,
+        val privateBlocked: Boolean,
+    ) {
 
-        // `replyUnavailable` is about one anchor, so only unreachability reaches the caller: any other
-        // refusal says nothing about the next send.
+        // `replyUnavailable` is about one anchor, so it never reaches the caller: it says nothing about the
+        // next send. a chat that is gone outranks a closed private one, since it stops every task there.
         fun asOutcome(): DeliveryOutcome =
-            if (chatUnreachable) DeliveryOutcome.Unreachable else DeliveryOutcome.Handled
+            when {
+                chatUnreachable -> DeliveryOutcome.Unreachable
+                privateBlocked -> DeliveryOutcome.PrivateChatClosed
+                else -> DeliveryOutcome.Handled
+            }
     }
 
     suspend fun send(message: Message, result: AgentResult) {
@@ -187,11 +196,14 @@ class TelegramDelivery(
         if (attribution?.anchorMessageId == null) {
             attribution?.let { notify(delivery.destination, it.headerText(messages)) }
 
-            return dispatch(delivery.result, plainTarget, plainTarget, recipient, messages).asOutcome()
+            return dispatch(delivery.result, plainTarget, plainTarget, recipient, messages, announcePrivateBlocked = false)
+                .asOutcome()
         }
 
         val anchorTarget = DeliveryTarget(target, replyToMessageId = attribution.anchorMessageId.telegramMessageId)
-        val outcome = dispatch(delivery.result, anchorTarget, plainTarget, recipient, messages)
+
+        val outcome =
+            dispatch(delivery.result, anchorTarget, plainTarget, recipient, messages, announcePrivateBlocked = false)
 
         // the task's origin message is gone, so the answer went unanchored and the attribution line goes on
         // its own.
@@ -323,17 +335,38 @@ class TelegramDelivery(
         }
     }
 
+    /** As [notify]; the one refusal reported is the person's own, a chat never opened or blocked. */
+    override suspend fun notifyPrivately(person: UserRef, text: String): DeliveryOutcome {
+        val chatId = person.telegramUserId
+
+        return runCatching {
+            withFloodWaitRetry(chatId) {
+                TelegramOutputSender.sendText(client, ChatTarget(chatId), text, replyParameters = null)
+            }
+
+            DeliveryOutcome.Handled
+        }.getOrElse { error ->
+            error.rethrowIfCancellation()
+            log.warn(error) { "failed to send notice to the private chat of user=$chatId" }
+
+            if (isPrivateChatBlocked(error)) DeliveryOutcome.PrivateChatClosed else DeliveryOutcome.Handled
+        }
+    }
+
     private suspend fun dispatch(
         result: AgentResult,
         originTarget: DeliveryTarget,
         currentChatTarget: DeliveryTarget,
         senderPrivateChatId: Long?,
         messages: Messages,
+        // a turn somebody is waiting on says so where they asked; a scheduled one leaves it to its caller,
+        // which knows whether the task goes on.
+        announcePrivateBlocked: Boolean = true,
     ): DispatchOutcome {
         val comment = result.comment?.takeIf { it.isNotBlank() }
         var replyUnavailable = false
         var chatUnreachable = false
-        var privateBlockedNoticed = false
+        var privateBlocked = false
         var sentAnything = false
 
         // one output into the chat or the sender's DM, with a transcript row only for a send that happened;
@@ -374,10 +407,9 @@ class TelegramDelivery(
                 }
 
                 ItemDeliveryOutcome.PrivateBlocked -> {
-                    if (!privateBlockedNoticed) {
-                        privateBlockedNoticed = true
-                        notifyPrivateChatBlocked(originTarget, messages)
-                    }
+                    if (!privateBlocked && announcePrivateBlocked) notifyPrivateChatBlocked(originTarget, messages)
+
+                    privateBlocked = true
 
                     return false
                 }
@@ -419,7 +451,7 @@ class TelegramDelivery(
             deliverOne(BotOutput.Text(comment), caption = null, toPrivate = result.commentToPrivate)
         }
 
-        return DispatchOutcome(replyUnavailable, chatUnreachable)
+        return DispatchOutcome(replyUnavailable, chatUnreachable, privateBlocked)
     }
 
     // an already delivered item can neither carry the caption nor keep the last media output from taking it.

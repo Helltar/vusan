@@ -7,9 +7,11 @@ import com.helltar.vusan.agent.scheduledTaskBlock
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.runInOwnJob
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.delivery.DeliveryOutcome
 import com.helltar.vusan.delivery.OutputDelivery
 import com.helltar.vusan.delivery.TurnDelivery
 import com.helltar.vusan.request.AccessPolicy
+import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.request.ChatProfile
 import com.helltar.vusan.request.ChatProfileLookup
 import com.helltar.vusan.request.ChatRef
@@ -35,7 +37,14 @@ class TaskScheduler(
     private val clock: () -> Instant = Instant::now,
 ) {
 
-    private enum class FireOutcome { Delivered, RunFailed, ChatUnreachable, Stopped }
+    private sealed interface FireOutcome {
+
+        data class Delivered(val outcome: DeliveryOutcome) : FireOutcome
+
+        data object RunFailed : FireOutcome
+
+        data object Stopped : FireOutcome
+    }
 
     fun launchIn(scope: CoroutineScope): Job =
         scope.launch {
@@ -102,21 +111,54 @@ class TaskScheduler(
 
         // reschedule even when every attempt fails, or a persistent error would re-run the agent on every
         // tick.
-        val chatUnreachable =
+        val outcome =
             runCatching { fire(task) }
                 .getOrElse {
                     it.rethrowIfCancellation()
                     log.error(it) { "task id=${task.id} run failed; rescheduling" }
-                    false
+                    DeliveryOutcome.Handled
                 }
 
-        if (chatUnreachable) {
-            parkTasksOfUnreachableChat(task.scope.chat)
-            return
+        if (!parkedBy(task, outcome)) rescheduleAfterFire(task, now)
+    }
+
+    // whether [outcome] stopped the task where it stands: paused tasks keep their slot, and resuming moves
+    // a recurring one on.
+    private suspend fun parkedBy(task: ScheduledTask, outcome: DeliveryOutcome): Boolean =
+        when (outcome) {
+            DeliveryOutcome.Handled -> false
+
+            DeliveryOutcome.Unreachable -> {
+                parkTasksOfUnreachableChat(task.scope.chat)
+                true
+            }
+
+            DeliveryOutcome.PrivateChatClosed -> parkedByClosedPrivateChat(task)
         }
 
-        rescheduleAfterFire(task, now)
+    // a task that only writes privately has nowhere left to write, so it stops until its owner opens the
+    // chat and resumes it; firing on would repeat this notice at every slot. one that was sent there by a
+    // single turn's choice keeps its schedule, and the chat hears what an asking turn would have been told.
+    private suspend fun parkedByClosedPrivateChat(task: ScheduledTask): Boolean {
+        val messages = Messages.of(task.language)
+
+        if (!task.deliverPrivately) {
+            delivery.notify(task.destination, messages.privateBlockedNotice)
+            return false
+        }
+
+        repo.pauseForUser(task.scope.user, task.id)
+        log.warn { "task id=${task.id} paused: the private chat of ${task.scope.user} is closed to the bot" }
+        delivery.notify(task.destination, messages.taskPrivateChatClosedNotice(task.id, task.title))
+
+        return true
     }
+
+    private suspend fun notifyAbout(task: ScheduledTask, text: String): DeliveryOutcome =
+        if (task.deliverPrivately)
+            delivery.notifyPrivately(task.scope.user, text)
+        else
+            delivery.notify(task.destination, text)
 
     // the schedule is kept and never reports a miss, so regaining access resumes the task without a backlog:
     // a recurring one moves past the denied fire, a one-time one waits in place.
@@ -141,27 +183,18 @@ class TaskScheduler(
         }
 
         val outcome =
-            delivery.notify(
-                task.destination,
-                Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel),
-            )
+            notifyAbout(task, Messages.of(task.language).taskMissedNotice(task.id, task.title, scheduledLabel))
 
         // the notice costs one API call and the run a whole agent turn, so a chat refusing even the notice is
         // caught here.
-        if (outcome.isUnreachable) {
-            parkTasksOfUnreachableChat(task.scope.chat)
-            return
-        }
-
-        rescheduleAfterFire(task, now)
+        if (!parkedBy(task, outcome)) rescheduleAfterFire(task, now)
     }
 
-    // `true` means the chat itself is gone, not that the task failed.
-    private suspend fun fire(task: ScheduledTask): Boolean {
+    // what became of the answer, or of the notice standing in for it: a task that failed is still `Handled`.
+    private suspend fun fire(task: ScheduledTask): DeliveryOutcome {
         for (attempt in 1..MAX_ATTEMPTS) {
-            when (runAttempt(task, attempt)) {
-                FireOutcome.Delivered -> return false
-                FireOutcome.ChatUnreachable -> return true
+            when (val fired = runAttempt(task, attempt)) {
+                is FireOutcome.Delivered -> return fired.outcome
                 FireOutcome.Stopped -> return reportStopped(task)
                 FireOutcome.RunFailed -> Unit
             }
@@ -180,9 +213,7 @@ class TaskScheduler(
 
         log.error { "task id=${task.id} failed on all $MAX_ATTEMPTS attempts; nothing was delivered" }
 
-        return delivery
-            .notify(task.destination, Messages.of(task.language).taskFailedNotice(task.id, task.title))
-            .isUnreachable
+        return notifyAbout(task, Messages.of(task.language).taskFailedNotice(task.id, task.title))
     }
 
     // the bot can no longer post here (removed, blocked or muted). each task would run the whole agent only
@@ -221,7 +252,7 @@ class TaskScheduler(
                 ?.takeUnless { it.failed }
                 ?: return FireOutcome.RunFailed
 
-        val chatUnreachable =
+        val outcome =
             runCatching {
                 delivery.deliver(
                     TurnDelivery(
@@ -231,31 +262,33 @@ class TaskScheduler(
                         language = task.language,
                         attribution = task.attribution,
                     ),
-                ).isUnreachable
+                )
             }.getOrElse {
                 it.rethrowIfCancellation()
 
                 log.error(it) { "task id=${task.id} fired but delivery failed; not retrying to avoid duplicates" }
 
-                false
+                DeliveryOutcome.Handled
             }
 
-        return if (chatUnreachable) FireOutcome.ChatUnreachable else FireOutcome.Delivered
+        return FireOutcome.Delivered(outcome)
     }
 
     // matters most for a task: nobody waits to hear the chat refused, and the whole run is spent before the
-    // first send would say so.
+    // first send would say so. what goes to the owner's private chat is not held to the group's limits.
     private suspend fun chatProfileFor(task: ScheduledTask): ChatProfile =
-        if (task.chatIsPrivate) ChatProfile.NONE else chatProfiles.of(task.scope.chat)
+        when {
+            task.chatIsPrivate -> ChatProfile.NONE
+            task.deliverPrivately -> chatProfiles.of(task.scope.chat).copy(capabilities = ChatCapabilities.UNRESTRICTED)
+            else -> chatProfiles.of(task.scope.chat)
+        }
 
     // a fire the user stopped is not a failure and is not retried: the recurrence moves on as after a
     // delivery. `/stop` itself says nothing, so the notice is left to the stopped fire.
-    private suspend fun reportStopped(task: ScheduledTask): Boolean {
+    private suspend fun reportStopped(task: ScheduledTask): DeliveryOutcome {
         log.info { "task id=${task.id} was stopped by its owner" }
 
-        return delivery
-            .notify(task.destination, Messages.of(task.language).turnStoppedNotice)
-            .isUnreachable
+        return notifyAbout(task, Messages.of(task.language).turnStoppedNotice)
     }
 
     private suspend fun rescheduleAfterFire(task: ScheduledTask, now: Instant) {
@@ -302,6 +335,10 @@ internal suspend fun ScheduledTask.isHeldBy(requests: LeaveAloneRepository?, now
 
 // a failed run left no history, so the retry says in the prompt what went wrong; usually a run that spent its
 // whole budget researching and never delivered.
+private const val PRIVATE_DELIVERY_HINT =
+    "Everything this task sends goes to its owner's private chat, not to this chat. " +
+            "That is already arranged, so send as usual."
+
 private const val RETRY_HINT =
     "An earlier attempt at this task ended without delivering anything. " +
             "Get to the result faster this time: gather only what the task needs, then send it."
@@ -312,6 +349,7 @@ internal fun scheduledAgentRequest(task: ScheduledTask, attempt: Int, chatProfil
         context = task.toRequestContext(chatProfile),
         prompt = scheduledTaskPrompt(task, attempt),
         conversationEntry = conversationEntry(task),
+        replyPrivately = task.deliverPrivately,
     )
 
 // history keeps the task as the user wrote it, without the retry hint.
@@ -324,6 +362,7 @@ internal fun scheduledTaskPrompt(task: ScheduledTask, attempt: Int): String =
         task.recurrence.display,
         buildString {
             appendLine("This is a scheduled task you set up earlier. Execute it now without asking for confirmation.")
+            if (task.deliverPrivately) appendLine(PRIVATE_DELIVERY_HINT)
             append("Task: ").append(task.prompt)
             if (attempt > 1) append('\n').append(RETRY_HINT)
         },

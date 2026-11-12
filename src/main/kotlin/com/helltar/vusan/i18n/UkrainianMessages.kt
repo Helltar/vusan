@@ -176,6 +176,12 @@ internal object UkrainianMessages : Messages {
         return "⚠️ Завдання #$id$label не вийшло: не вдалося виконати його навіть за кілька спроб."
     }
 
+    override fun taskPrivateChatClosedNotice(id: Long, title: String?): String {
+        val label = title?.let { " «$it»" } ?: ""
+
+        return "⚠️ Завдання #$id$label на паузі: не можу написати його власнику в особисті. Відкрий чат зі мною, натисни /start і віднови його в /tasks."
+    }
+
     override fun taskScheduledByNotice(mention: String) = "⏰ Заплановано: $mention"
 
     override fun taskFollowUpNotice(mention: String) = "💬 Повертаюся до розмови з $mention"

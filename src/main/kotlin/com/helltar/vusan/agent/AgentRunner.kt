@@ -178,6 +178,8 @@ class AgentRunner(
         val erasuresSeen = sentConversations?.erasuresOf(context.chatRef) ?: 0
 
         val outbox = BotOutbox(context.chat.capabilities)
+        if (request.replyPrivately) outbox.useDirectMessages()
+
         val toolBudget = TurnToolBudget(agentFactory.liveToolResultMaxTokens)
         val shelf = TurnShelf(context.attachedFiles)
         val toolCatalog = toolCatalogFactory.buildCatalog(context, outbox, toolBudget, shelf, narrator)

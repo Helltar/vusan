@@ -91,7 +91,9 @@ Before it: [running a turn](turn.md).
       for an answer instead of OkHttp's ten seconds, so this stays rare, and `LOCAL_BOT_API_IO_TIMEOUT` behind a local
       Bot API server, which answers an upload only once it has passed the file on to Telegram.
     - **Gone targets and blocked DMs** — a reply whose target no longer exists is retried without the anchor
-      (`DeliveryTarget.withoutReply`); a private chat the bot cannot write to produces a notice in the group instead.
+      (`DeliveryTarget.withoutReply`); a private chat the bot cannot write to produces a notice in the group instead. For a scheduled fire the notice is
+      the scheduler's to send: `OutputDelivery.deliver` and `notifyPrivately` only answer
+      `DeliveryOutcome.PrivateChatClosed`, because whether the task goes on decides what the chat is told.
     - **Unreachable chats** — a chat that refuses the bot rather than the payload (kicked, left, blocked, deleted, write
       rights taken away — `TelegramErrors.isChatUnreachable`) is answered differently from every other rejection: no
       fallback can help, so the send cascade stops instead of buying one more rejection per degradation step, the rest

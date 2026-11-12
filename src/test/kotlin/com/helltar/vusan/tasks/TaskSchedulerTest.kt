@@ -117,6 +117,31 @@ class TaskSchedulerTest {
         assertNull(task.copy(chatIsPrivate = true).attribution)
     }
 
+    // the owner reads it in their own private chat, where the line would name them to themselves.
+    @Test
+    fun `a group task delivered privately is attributed to nobody`() {
+        assertNull(task.copy(deliverPrivately = true).attribution)
+    }
+
+    @Test
+    fun `a task delivered privately answers there from its first output and is told so`() {
+        val privately = task.copy(deliverPrivately = true)
+        val request = scheduledAgentRequest(privately, attempt = 1, ChatProfile.NONE)
+
+        assertTrue(request.replyPrivately)
+        assertFalse(request.context.chat.isPrivate, "the task still runs in its group's conversation")
+        assertContains(request.prompt, "goes to its owner's private chat")
+        assertFalse(request.conversationEntry.contains("private chat"))
+    }
+
+    @Test
+    fun `an ordinary task answers in its chat`() {
+        val request = scheduledAgentRequest(task, attempt = 1, ChatProfile.NONE)
+
+        assertFalse(request.replyPrivately)
+        assertFalse(request.prompt.contains("private chat"))
+    }
+
     @Test
     fun `the first attempt carries the task and no retry hint`() {
         val prompt = scheduledTaskPrompt(task, attempt = 1)

@@ -173,6 +173,49 @@ class TaskToolsTest {
         Unit
     }
 
+    @Test
+    fun `a group task can deliver to its owner's private chat while staying in the group`() = runBlocking {
+        val tools = tools(requestContext(chatId = -200L, userId = 100L, isPrivate = false))
+
+        val result = tools.scheduleTask("send the outage chart", "every 30m", deliverPrivately = true)
+
+        assertContains(result, "delivers to the user's private chat")
+        val task = repo.listForUser(testUser(100)).single()
+        assertTrue(task.deliverPrivately)
+        assertFalse(task.chatIsPrivate)
+        assertEquals(testScope(userId = 100, chatId = -200L), task.scope)
+        assertContains(tools.listTasks(), "delivers=the user's private chat")
+    }
+
+    @Test
+    fun `a task made in a private chat never carries the private delivery flag`() = runBlocking {
+        val tools = tools(requestContext(chatId = 100L, userId = 100L))
+
+        tools.scheduleTask("send the outage chart", "every 30m", deliverPrivately = true)
+
+        val task = repo.listForUser(testUser(100)).single()
+        assertFalse(task.deliverPrivately)
+        assertContains(tools.editTask(task.id, deliverPrivately = true), "already has the requested values")
+        assertFalse(tools.listTasks().contains("delivers="))
+    }
+
+    @Test
+    fun `edit tool moves a group task's delivery to the private chat and back`() = runBlocking {
+        val id = createTask(chatId = -200L, title = "group report")
+        val tools = tools(requestContext(chatId = -200L, userId = 100L, isPrivate = false))
+
+        assertContains(tools.editTask(id, deliverPrivately = true), "delivers=the user's private chat")
+        val moved = assertNotNull(repo.findForUser(testUser(100), id))
+        assertTrue(moved.deliverPrivately)
+        assertEquals("run group report", moved.prompt)
+
+        assertContains(tools.editTask(id, title = "renamed"), "delivers=the user's private chat")
+        assertTrue(assertNotNull(repo.findForUser(testUser(100), id)).deliverPrivately)
+
+        assertContains(tools.editTask(id, deliverPrivately = false), "delivers=its chat")
+        assertFalse(assertNotNull(repo.findForUser(testUser(100), id)).deliverPrivately)
+    }
+
     private fun tools(context: RequestContext) =
         TaskTools(repo = repo, context = context, maxTasksPerUser = 5)
 

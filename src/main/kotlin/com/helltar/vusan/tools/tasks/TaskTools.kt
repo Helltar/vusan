@@ -28,6 +28,8 @@ class TaskTools(
         timezone: String? = null,
         @Arg(TaskToolDescriptions.SCHEDULE_TITLE)
         title: String? = null,
+        @Arg(TaskToolDescriptions.SCHEDULE_DELIVER_PRIVATELY)
+        deliverPrivately: Boolean = false,
     ): String = suspendToolGuard {
         val owner = context.user
         val chat = context.chatRef
@@ -57,20 +59,22 @@ class TaskTools(
                     "Cancel one with `cancelTask` before scheduling a new one."
         }
 
-        val id =
-            repo.create(
-                context.newScheduledTask(
-                    scope = ConversationScope(owner, chat),
-                    prompt = trimmedPrompt,
-                    title = trimmedTitle,
-                    recurrence = plan.recurrence,
-                    timezone = tz,
-                    nextFireAt = plan.firstFire,
-                    selfInitiated = false,
-                ),
+        val task =
+            context.newScheduledTask(
+                scope = ConversationScope(owner, chat),
+                prompt = trimmedPrompt,
+                title = trimmedTitle,
+                recurrence = plan.recurrence,
+                timezone = tz,
+                nextFireAt = plan.firstFire,
+                selfInitiated = false,
+                deliverPrivately = deliverPrivately,
             )
 
-        "Scheduled task id=$id, fires=${formatFire(plan.firstFire, tz)} (${plan.recurrence.display})."
+        val id = repo.create(task)
+
+        "Scheduled task id=$id, fires=${formatFire(plan.firstFire, tz)} (${plan.recurrence.display})" +
+                "${if (task.deliverPrivately) ", delivers to the user's private chat" else ""}."
     }
 
     @Tool(TaskToolDescriptions.LIST_TASKS, readOnly = true)
@@ -101,11 +105,13 @@ class TaskTools(
         timezone: String? = null,
         @Arg(TaskToolDescriptions.EDIT_TITLE)
         title: String? = null,
+        @Arg(TaskToolDescriptions.EDIT_DELIVER_PRIVATELY)
+        deliverPrivately: Boolean? = null,
     ): String = suspendToolGuard {
         val owner = context.user
         val scopedChat = scopedChat()
 
-        if (listOf(prompt, schedule, timezone, title).all { it == null })
+        if (listOf(prompt, schedule, timezone, title, deliverPrivately).all { it == null })
             return@suspendToolGuard "No changes provided for task id=$id."
 
         val existing =
@@ -161,6 +167,8 @@ class TaskTools(
                 recurrence = editedSchedule.recurrence,
                 timezone = editedTimezone,
                 nextFireAt = editedSchedule.firstFire,
+                // a task made in a private chat already delivers there, from whichever chat it is edited.
+                deliverPrivately = (deliverPrivately ?: existing.deliverPrivately) && !existing.chatIsPrivate,
             )
 
         if (edited == existing)
@@ -170,7 +178,8 @@ class TaskTools(
             return@suspendToolGuard "Task id=$id is no longer available."
 
         "Updated task id=$id (next=${formatFire(edited.nextFireAt, edited.timezone)}, " +
-                "repeat=${edited.recurrence.display}, status=${if (edited.paused) "paused" else "active"})."
+                "repeat=${edited.recurrence.display}, status=${if (edited.paused) "paused" else "active"}, " +
+                "delivers=${edited.deliversTo})."
     }
 
     @Tool(TaskToolDescriptions.PAUSE_TASK)
@@ -248,6 +257,9 @@ class TaskTools(
             "No scheduled task id=$id found for the current user in this chat."
 }
 
+private val ScheduledTask.deliversTo: String
+    get() = if (deliverPrivately) "the user's private chat" else "its chat"
+
 private fun formatTaskLine(task: ScheduledTask): String =
     buildString {
         append("- id=").append(task.id)
@@ -255,6 +267,7 @@ private fun formatTaskLine(task: ScheduledTask): String =
         append(", repeat=").append(task.recurrence.display)
         append(", status=").append(if (task.paused) "paused" else "active")
         if (task.selfInitiated) append(", source=your own follow-up")
+        if (task.deliverPrivately) append(", delivers=").append(task.deliversTo)
         task.title?.let { append(", title=\"").append(it).append('"') }
         append(", prompt=\"").append(task.prompt).append('"')
     }

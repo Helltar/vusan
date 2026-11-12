@@ -35,6 +35,9 @@ data class ScheduledTask(
     val language: Language,
     // a follow-up the bot set up itself, not one the user asked for.
     val selfInitiated: Boolean = false,
+    // a fire's output and the notices about it go to the owner's private chat. the task still belongs to
+    // its chat: it runs in that conversation and fires only while that chat admits its owner.
+    val deliverPrivately: Boolean = false,
 )
 
 data class NewScheduledTask(
@@ -51,6 +54,7 @@ data class NewScheduledTask(
     val chatIsPrivate: Boolean,
     val language: Language,
     val selfInitiated: Boolean = false,
+    val deliverPrivately: Boolean = false,
 )
 
 private val FIRE_DISPLAY = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
@@ -92,13 +96,13 @@ internal val ScheduledTask.destination: Destination
     get() = Destination(scope.chat, threadId = creatorThreadId)
 
 /**
- * Whose fire this is, for the line above it in the chat. A private chat gets none: naming the owner to
- * themselves says nothing. Who they are is passed on, not how to write them; the mention is the messenger's
- * syntax.
+ * Whose fire this is, for the line above it in the chat. A private chat gets none, the owner's own included:
+ * naming the owner to themselves says nothing. Who they are is passed on, not how to write them; the mention
+ * is the messenger's syntax.
  */
 internal val ScheduledTask.attribution: Attribution?
     get() =
-        if (chatIsPrivate)
+        if (chatIsPrivate || deliverPrivately)
             null
         else
             Attribution(

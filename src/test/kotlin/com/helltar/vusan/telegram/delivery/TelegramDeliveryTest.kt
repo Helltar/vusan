@@ -12,6 +12,7 @@ import java.net.SocketTimeoutException
 import java.util.concurrent.CompletableFuture
 import com.helltar.vusan.delivery.Attribution
 import com.helltar.vusan.delivery.AttributionReason
+import com.helltar.vusan.delivery.DeliveryOutcome
 import com.helltar.vusan.delivery.Destination
 import com.helltar.vusan.delivery.TurnDelivery
 import com.helltar.vusan.request.testChat
@@ -109,6 +110,41 @@ class TelegramDeliveryTest {
             )
 
         assertTrue(outcome.isUnreachable, "a kicked bot must not keep firing tasks into that chat")
+    }
+
+    @Test
+    fun `a scheduled send to a closed private chat is reported and announced nowhere`() = runBlocking {
+        val client = ClosedPrivateChatClient(userId = 2)
+
+        val outbox =
+            BotOutbox().apply {
+                useDirectMessages()
+                enqueueText("The outage chart changed.")
+            }
+
+        val outcome =
+            TelegramDelivery(client.proxy).deliver(
+                TurnDelivery(
+                    result = AgentResult(outputs = outbox.pending, comment = null, commentToPrivate = true),
+                    destination = Destination(testChat(-1)),
+                    recipient = testUser(2),
+                    language = Language.ENGLISH,
+                ),
+            )
+
+        assertEquals(DeliveryOutcome.PrivateChatClosed, outcome)
+        assertFalse(outcome.isUnreachable, "the group itself still takes messages")
+        assertTrue(client.sentElsewhere.isEmpty(), "what to tell the group is the scheduler's to decide")
+    }
+
+    @Test
+    fun `a notice to a closed private chat is reported, and one that arrives is handled`() = runBlocking {
+        val closed = ClosedPrivateChatClient(userId = 2)
+        val delivery = TelegramDelivery(closed.proxy)
+
+        assertEquals(DeliveryOutcome.PrivateChatClosed, delivery.notifyPrivately(testUser(2), "Skipped task #7."))
+        assertEquals(DeliveryOutcome.Handled, delivery.notifyPrivately(testUser(3), "Skipped task #7."))
+        assertEquals(listOf("3" to "Skipped task #7."), closed.sentElsewhere)
     }
 
     @Test
@@ -505,6 +541,43 @@ class TelegramDeliveryTest {
                     CompletableFuture.completedFuture<Any>(Message())
                 }
             } as TelegramClient
+    }
+
+    // one person never opened the bot's chat; every other chat takes what it is sent.
+    private class ClosedPrivateChatClient(private val userId: Long) {
+
+        val sentElsewhere = mutableListOf<Pair<String, String>>()
+
+        val proxy: TelegramClient =
+            Proxy.newProxyInstance(
+                TelegramClient::class.java.classLoader,
+                arrayOf(TelegramClient::class.java),
+            ) { _, method, args ->
+                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+                handle(args.single())
+            } as TelegramClient
+
+        private fun handle(request: Any): CompletableFuture<Any> =
+            when {
+                request !is SendMessage -> CompletableFuture.completedFuture(true)
+
+                request.chatId == userId.toString() ->
+                    CompletableFuture.failedFuture(
+                        TelegramApiRequestException(
+                            "Error executing request",
+                            ApiResponse.builder<Serializable>()
+                                .ok(false)
+                                .errorCode(403)
+                                .errorDescription("Forbidden: bot can't initiate conversation with a user")
+                                .build(),
+                        ),
+                    )
+
+                else -> {
+                    sentElsewhere += request.chatId to request.text
+                    CompletableFuture.completedFuture(Message())
+                }
+            }
     }
 
     private class RejectingClient(private val description: String) {

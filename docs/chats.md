@@ -38,6 +38,10 @@ How they run:
 - **Access** — a task whose owner and chat both lost access does not fire. A recurring one skips
   those runs and resumes when access returns; a one-time one waits, or is reported missed if that is
   over an hour late.
+- **Private delivery** — a task made in a group can send what it produces to its owner's private chat
+  instead; ask for it when setting the task up, or later. The task still belongs to the group and
+  fires only while the group has access. If the owner has not opened a private chat with Vusan, the
+  task pauses at its next run and the group is told once.
 - **`/tasks` in a group** — shows only the tasks its sender made in that chat, seen by them alone.
 
 ## While it is busy

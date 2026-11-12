@@ -175,6 +175,12 @@ internal object RussianMessages : Messages {
         return "⚠️ Задача #$id$label не выполнена: даже за несколько попыток ничего не вышло."
     }
 
+    override fun taskPrivateChatClosedNotice(id: Long, title: String?): String {
+        val label = title?.let { " «$it»" } ?: ""
+
+        return "⚠️ Задача #$id$label на паузе: не могу написать её владельцу в личные. Открой чат со мной, нажми /start и возобнови её в /tasks."
+    }
+
     override fun taskScheduledByNotice(mention: String) = "⏰ Запланировано: $mention"
 
     override fun taskFollowUpNotice(mention: String) = "💬 Возвращаюсь к разговору с $mention"

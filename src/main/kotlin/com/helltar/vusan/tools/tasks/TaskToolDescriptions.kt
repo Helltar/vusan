@@ -35,6 +35,12 @@ internal object TaskToolDescriptions {
         "Short human label shown in task lists. " +
                 "Omit if the prompt itself is short and self-explanatory."
 
+    const val SCHEDULE_DELIVER_PRIVATELY =
+        "Pass `true` when the user wants what this task produces sent to their private chat with the bot instead of the current chat. " +
+                "Every fire and every notice about the task then goes there by itself, so leave that out of `prompt`. " +
+                "The user must have opened a private chat with the bot by sending `/start` there; otherwise the task pauses at its first fire and says so in this chat. " +
+                "It changes nothing in a private chat."
+
     const val LIST_TASKS =
         "List the user's scheduled tasks (id, next fire time, recurrence, status, title/prompt). " +
                 """Call when the user asks "what do I have scheduled" or before changing one. """ +
@@ -67,6 +73,11 @@ internal object TaskToolDescriptions {
     const val EDIT_TITLE =
         "Optional replacement short human label. " +
                 "Omit to preserve the current title; pass `\"\"` to remove it."
+
+    const val EDIT_DELIVER_PRIVATELY =
+        "Optional: `true` sends what the task produces to the user's private chat with the bot from now on, `false` returns it to the chat the task was made in. " +
+                "Use it when the user asks to move an existing task's results to DMs or back, instead of rewriting `prompt`. " +
+                "Omit to preserve where the task delivers."
 
     const val PAUSE_TASK =
         "Pause a scheduled task by its numeric id without deleting it. " +

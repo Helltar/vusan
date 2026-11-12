@@ -19,7 +19,15 @@ Part of the [architecture index](../architecture.md).
   "missed" notice and are advanced/disabled rather than fired. A failed run (`AgentResult.failed`, or a thrown error)
   delivers nothing, so it is repeated up to `MAX_ATTEMPTS` times with a short backoff, the retry prompt telling the
   agent that the earlier attempt delivered nothing; a failed *delivery* is never repeated, since part of the answer may
-  already be in the chat. Once the attempts are spent the chat gets a "failed" notice. Either way the task is
+  already be in the chat. Once the attempts are spent the chat gets a "failed" notice. A group task may deliver to its
+  owner's private chat instead (`ScheduledTask.deliverPrivately`, set by `scheduleTask` or `editTask`): it still
+  belongs to its chat — it runs in that conversation and fires only while the chat admits its owner — but the fire is
+  an `AgentRequest` with `replyPrivately`, so the outbox routes every output to the owner from the first one on, with
+  no attribution line and without the group's posting limits, and the missed, failed and stopped notices go the same
+  way through `OutputDelivery.notifyPrivately`. A private chat the owner never opened or has blocked comes back as
+  `DeliveryOutcome.PrivateChatClosed`: that task alone is paused and its chat is told once, since firing on would
+  repeat the notice at every slot. A task that is not private but whose turn chose `replyInPrivateMessages` keeps its
+  schedule, and its chat gets the notice an asking turn would. Either way the task is
   advanced afterward — or deleted, when the recurrence has no fire left — so a persistent error cannot re-fire it on
   every poll tick. A task that has fired for the last time is removed rather than kept switched off: `/tasks` never
   listed one and nothing else reads one. A tick reads every due task

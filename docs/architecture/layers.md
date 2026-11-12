@@ -115,7 +115,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   (`AttributionReason`) — the adapter writes the mention itself, since naming a person is platform syntax — and
   `OutputDelivery`, which an adapter implements so nothing outside one needs a messenger client to deliver a turn. Its
   `deliverUnprompted` is the send with no person behind it at all — what the bot says of its own accord, optionally
-  hung under one message.
+  hung under one message — and its `notifyPrivately` is a notice for one person, in whichever chat the adapter knows
+  as theirs.
 - **`tasks/`** — scheduled-task subsystem: storage, persisted pause state, recurrence math, and the background
   `TaskScheduler`. It knows no messenger: it delivers through `OutputDelivery` and reads chat facts through
   `ChatProfileLookup`.

@@ -111,6 +111,9 @@ interface Messages {
 
     fun taskFailedNotice(id: Long, title: String?): String
 
+    /** For the chat a task lives in, when what it sends privately has nowhere to go; the task is paused. */
+    fun taskPrivateChatClosedNotice(id: Long, title: String?): String
+
     fun taskScheduledByNotice(mention: String): String
 
     fun taskFollowUpNotice(mention: String): String

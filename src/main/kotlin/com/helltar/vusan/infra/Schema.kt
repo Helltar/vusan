@@ -26,7 +26,7 @@ import org.jetbrains.exposed.v1.core.Table
 internal object Schema {
 
     /** Raise by one for every schema change, together with the step that reaches it. */
-    const val VERSION = 8
+    const val VERSION = 9
 
     /**
      * The steps between versions: the statements under `N` take a database from `N - 1` to `N`. Every step a
@@ -54,6 +54,9 @@ internal object Schema {
             ),
             8 to listOf(
                 "DROP TABLE group_log_digests",
+            ),
+            9 to listOf(
+                "ALTER TABLE scheduled_tasks ADD COLUMN deliver_privately BOOLEAN DEFAULT 0 NOT NULL",
             ),
         )
 

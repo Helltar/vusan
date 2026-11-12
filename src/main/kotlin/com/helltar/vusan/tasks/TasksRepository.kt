@@ -35,6 +35,7 @@ class TasksRepository {
                 it[chatIsPrivate] = task.chatIsPrivate
                 it[language] = task.language.code
                 it[selfInitiated] = task.selfInitiated
+                it[deliverPrivately] = task.deliverPrivately
             }.value
     }
 
@@ -130,6 +131,9 @@ class TasksRepository {
 
                 if (original.nextFireAt != edited.nextFireAt)
                     it[nextFireAt] = edited.nextFireAt
+
+                if (original.deliverPrivately != edited.deliverPrivately)
+                    it[deliverPrivately] = edited.deliverPrivately
             } > 0
     }
 
@@ -205,6 +209,7 @@ class TasksRepository {
             creatorDisplayName = this[ScheduledTasksTable.creatorDisplayName],
             chatIsPrivate = this[ScheduledTasksTable.chatIsPrivate],
             selfInitiated = this[ScheduledTasksTable.selfInitiated],
+            deliverPrivately = this[ScheduledTasksTable.deliverPrivately],
             nextFireAt = this[ScheduledTasksTable.nextFireAt],
             paused = this[ScheduledTasksTable.paused],
             language = Language.fromCode(this[ScheduledTasksTable.language]),

@@ -20,6 +20,7 @@ internal fun RequestContext.newScheduledTask(
     timezone: ZoneId,
     nextFireAt: Instant,
     selfInitiated: Boolean,
+    deliverPrivately: Boolean = false,
 ) = NewScheduledTask(
     scope = scope,
     prompt = prompt,
@@ -34,6 +35,8 @@ internal fun RequestContext.newScheduledTask(
     chatIsPrivate = chat.isPrivate,
     language = language,
     selfInitiated = selfInitiated,
+    // a private chat is already where its owner reads; the flag would only say the same thing twice.
+    deliverPrivately = deliverPrivately && !chat.isPrivate,
 )
 
 internal fun parseTimezone(raw: String?): ZoneId? {

@@ -5,6 +5,7 @@ import com.helltar.vusan.delivery.Destination
 import com.helltar.vusan.delivery.OutputDelivery
 import com.helltar.vusan.delivery.TurnDelivery
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.UserRef
 import java.lang.reflect.Proxy
 import java.util.concurrent.CompletableFuture
 import org.telegram.telegrambots.meta.api.methods.forum.CreateForumTopic
@@ -77,4 +78,6 @@ internal class RecordingDelivery : OutputDelivery {
     }
 
     override suspend fun notify(destination: Destination, text: String): DeliveryOutcome = error("not a notice")
+
+    override suspend fun notifyPrivately(person: UserRef, text: String): DeliveryOutcome = error("not a notice")
 }

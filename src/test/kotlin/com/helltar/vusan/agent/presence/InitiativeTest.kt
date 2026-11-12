@@ -12,6 +12,7 @@ import com.helltar.vusan.delivery.TurnDelivery
 import com.helltar.vusan.infra.Db
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.ChatRef
+import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.request.testUser
 import java.nio.file.Files
 import java.nio.file.Path
@@ -439,6 +440,9 @@ class InitiativeTest {
         override suspend fun deliver(delivery: TurnDelivery): DeliveryOutcome = error("not an unprompted send")
 
         override suspend fun notify(destination: Destination, text: String): DeliveryOutcome =
+            error("not an unprompted send")
+
+        override suspend fun notifyPrivately(person: UserRef, text: String): DeliveryOutcome =
             error("not an unprompted send")
 
         override suspend fun deliverUnprompted(

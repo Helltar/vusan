@@ -26,6 +26,10 @@ object ScheduledTasksTable : LongIdTable("scheduled_tasks") {
     val creatorUsername = varchar("creator_username", 64).nullable()
     val creatorDisplayName = varchar("creator_display_name", 200).nullable()
 
+    // what a fire sends goes to the owner's private chat instead of `chat_id`, where the task still lives
+    // and takes its access from. `chat_is_private` says what kind of chat that is, not where the answer goes.
+    val deliverPrivately = bool("deliver_privately").default(false)
+
     init {
         index(false, platform, userId)
         index(false, paused, nextFireAt)

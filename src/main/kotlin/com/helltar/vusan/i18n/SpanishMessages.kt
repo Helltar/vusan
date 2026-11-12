@@ -177,6 +177,12 @@ internal object SpanishMessages : Messages {
         return "⚠️ La tarea #$id$label no llegó a nada: no pude terminarla ni tras varios intentos."
     }
 
+    override fun taskPrivateChatClosedNotice(id: Long, title: String?): String {
+        val label = title?.let { " «$it»" } ?: ""
+
+        return "⚠️ La tarea #$id$label está en pausa: no puedo escribir a su dueño por privado. Abre mi chat, pulsa /start y reanúdala en /tasks."
+    }
+
     override fun taskScheduledByNotice(mention: String) = "⏰ Programado por $mention"
 
     override fun taskFollowUpNotice(mention: String) = "💬 Retomando la conversación con $mention"

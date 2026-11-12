@@ -23,11 +23,15 @@ interface OutputDelivery {
 
     /** Sends one line of plain text from the bot: no anchor, no formatting fallbacks. */
     suspend fun notify(destination: Destination, text: String): DeliveryOutcome
+
+    /** [notify], into [person]'s private chat; which chat that is, is the adapter's to know. */
+    suspend fun notifyPrivately(person: UserRef, text: String): DeliveryOutcome
 }
 
 /**
  * One finished turn, addressed. [recipient] is the person, not a private destination: the adapter works out
- * which chat that is, if any, and routes an item there only when the turn asked.
+ * which chat that is, if any, and routes an item there only when the turn asked. A private chat that refuses
+ * the item is reported, not announced: what to say about it, and where, is the caller's.
  */
 data class TurnDelivery(
     val result: AgentResult,
@@ -42,8 +46,8 @@ data class TurnDelivery(
  *
  * No `Partial` on purpose: an item refused for its content goes through a fallback chain and may still land
  * in another shape, so no adapter can honestly report one. What the caller needs is a destination that is
- * *gone* (every later send fails, so a scheduler must stop) versus everything else. Do not add a state an
- * adapter cannot actually distinguish.
+ * *gone* (every later send fails, so a scheduler must stop), a person who cannot be written to privately,
+ * and everything else. Do not add a state an adapter cannot actually distinguish.
  */
 sealed interface DeliveryOutcome {
 
@@ -52,6 +56,12 @@ sealed interface DeliveryOutcome {
 
     /** The destination is gone: the bot was removed, blocked or lost its right to post. */
     data object Unreachable : DeliveryOutcome
+
+    /**
+     * The person's private chat takes nothing from the bot: never opened, or blocked. What was meant for it
+     * did not arrive; the destination itself still stands.
+     */
+    data object PrivateChatClosed : DeliveryOutcome
 
     val isUnreachable: Boolean
         get() = this is Unreachable
