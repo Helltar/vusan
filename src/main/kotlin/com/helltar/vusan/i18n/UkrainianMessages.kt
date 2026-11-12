@@ -147,11 +147,13 @@ internal object UkrainianMessages : Messages {
         nextFire: String,
         recurrence: String,
         paused: Boolean,
+        deliverPrivately: Boolean,
     ): String =
         buildString {
             append("<b>#$id · $label</b>\n")
             append("🕒 $nextFire\n")
             append("🔁 $recurrence\n")
+            if (deliverPrivately) append("✉️ В особисті\n")
             append(if (paused) "⏸️ На паузі" else "🟢 Активне")
         }
 

@@ -97,6 +97,7 @@ interface Messages {
         nextFire: String,
         recurrence: String,
         paused: Boolean,
+        deliverPrivately: Boolean,
     ): String
 
     fun taskMenuPauseButton(id: Long): String

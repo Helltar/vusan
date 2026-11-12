@@ -331,6 +331,7 @@ internal class TaskMenuHandler(
                             nextFire = task.menuFireHtml(),
                             recurrence = task.recurrence.menuHtml(messages),
                             paused = task.paused,
+                            deliverPrivately = task.deliverPrivately,
                         ),
                 )
 

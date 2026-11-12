@@ -105,6 +105,24 @@ class TaskMenuHandlerTest {
     }
 
     @Test
+    fun `the menu marks only the task that delivers to its owner's private chat`() = runBlocking {
+        val privateId = createTask(userId = 100L, chatId = -200L, title = "outage chart", deliverPrivately = true)
+        val groupId = createTask(userId = 100L, chatId = -200L, title = "news digest")
+
+        handler.sendMenu(
+            target = ChatTarget(-200L),
+            userId = 100L,
+            replyParameters = replyParameters(55L),
+            chatIsPrivate = false,
+            messages = Messages.of(Language.ENGLISH),
+        )
+
+        val items = assertIs<SendMessage>(client.requests.single()).text.split("\n\n")
+        assertContains(items.single { "#$privateId ·" in it }, "✉️ Sent privately\n🟢 Active")
+        assertFalse(items.single { "#$groupId ·" in it }.contains("✉️"))
+    }
+
+    @Test
     fun `empty menus show task count and limit without a fraction`() = runBlocking {
         handler.sendMenu(
             target = ChatTarget(100L),
@@ -336,6 +354,7 @@ class TaskMenuHandlerTest {
         title: String,
         recurrence: Recurrence = Recurrence.Once,
         nextFireAt: Instant = Instant.parse("2026-07-28T12:00:00Z"),
+        deliverPrivately: Boolean = false,
     ): Long =
         repo.create(
             NewScheduledTask(
@@ -351,6 +370,7 @@ class TaskMenuHandlerTest {
                 creatorDisplayName = "Test User",
                 chatIsPrivate = chatId > 0L,
                 language = Language.ENGLISH,
+                deliverPrivately = deliverPrivately,
             ),
         )
 

@@ -148,11 +148,13 @@ internal object SpanishMessages : Messages {
         nextFire: String,
         recurrence: String,
         paused: Boolean,
+        deliverPrivately: Boolean,
     ): String =
         buildString {
             append("<b>#$id · $label</b>\n")
             append("🕒 $nextFire\n")
             append("🔁 $recurrence\n")
+            if (deliverPrivately) append("✉️ Por privado\n")
             append(if (paused) "⏸️ En pausa" else "🟢 Activa")
         }
 
