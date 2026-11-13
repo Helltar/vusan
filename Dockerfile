@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-alpine@sha256:0bfc69a4758a86710e5c474032d28400a8bd00874766f9e8b1642ac2fd293159 AS build
+FROM eclipse-temurin:21-jdk-alpine@sha256:82801f9dcdcbad5a05082aba8c86d1da5b72ccb498e71318b1f91b5a477887b3 AS build
 WORKDIR /app
 
 COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
@@ -12,7 +12,7 @@ COPY src ./src
 RUN ./gradlew --no-daemon shadowJar
 
 
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS runtime
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf AS runtime
 WORKDIR /app
 
 # deno is here for yt-dlp, not for the sandbox service that runs its own: youtube's signature and
