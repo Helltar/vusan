@@ -374,11 +374,11 @@ read under the `ADDRESSING_` prefix.
 | `ADDRESSING_ENABLED`          | `false`            | Turns the feature on.                                                                             |
 | `ADDRESSING_MODEL`            | —                  | The model that decides; never the chat model.                                                     |
 | `ADDRESSING_NAMES`            | the bot's handles  | Other spellings the chat uses, comma-separated.                                                   |
-| `ADDRESSING_PROVIDER`         | the chat provider  | `openai`, `anthropic`, `openrouter`, `google`, `deepseek`, `xai`, `codex` or `openai-compatible`. |
+| `ADDRESSING_PROVIDER`         | the chat provider  | Any [chat provider](#llm-provider), or `typesafe` for [Jev](#jev).                                |
 | `ADDRESSING_API_KEY`          | —                  | Required with `ADDRESSING_PROVIDER`, except on `codex`.                                           |
 | `ADDRESSING_BASE_URL`         | —                  | Required with `ADDRESSING_PROVIDER=openai-compatible`.                                            |
 | `ADDRESSING_COMPATIBLE_API`   | `completions`      | `completions` or `responses`, for `openai-compatible`.                                            |
-| `ADDRESSING_REASONING_EFFORT` | the least it takes | Effort of every verdict.                                                                          |
+| `ADDRESSING_REASONING_EFFORT` | the least it takes | Effort of every verdict; Jev has none.                                                            |
 
 - **Model** — a small, fast one, since every verdict is latency; of eight small OpenAI models
   measured, `gpt-5.6-luna` made the fewest wrong calls.
@@ -388,6 +388,25 @@ read under the `ADDRESSING_` prefix.
   handles minus the ending, so `@robinbot` answers to «robin».
 - **What is sent** — a message that names Vusan or follows its reply, with up to six lines before
   it. Nothing else in the chat leaves the bot.
+
+### Jev
+
+[TypeSafe](https://docs.typesafe.ai)'s Jev is a model built for this kind of question: it writes no
+text and answers with a probability, in about a third of a second. It is not a chat provider, so it
+serves this role only.
+
+```dotenv
+ADDRESSING_ENABLED=true
+ADDRESSING_PROVIDER=typesafe
+ADDRESSING_API_KEY=...
+ADDRESSING_MODEL=jev-1.14.0
+```
+
+- **Model** — name a version rather than `jev-latest`. Vusan answers from a probability of 0.7 up,
+  a line drawn on `jev-1.14.0`, and an alias moves to the next version on its own.
+- **At startup** — Vusan asks Jev one question, and a key or model TypeSafe refuses stops it there.
+- **In the log** — each verdict is preceded by an `ambient probability:` line saying how near the
+  line it was.
 
 ## Diary
 

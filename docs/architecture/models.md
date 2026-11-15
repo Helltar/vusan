@@ -52,7 +52,8 @@ Part of the [architecture index](../architecture.md).
   empty one. A vendor with a provider of its own is not followed here: its quirks live in that provider. A vision or an
   addressing model is
   one more `LlmProviderConfig`, read from its own prefix (`VISION_`, `ADDRESSING_`) and resolved the same way; by default
-  it runs on the chat provider with the chat key.
+  it runs on the chat provider with the chat key. The addressing role alone may also run on TypeSafe's Jev
+  (`AddressingJudge.Jev`), which is no `LlmProviderConfig`: it writes no text, so nothing else could use it.
 - **OpenRouter (`openrouter`)** — `config/llm/OpenRouterProvider` picks a client by the model's vendor prefix: a Claude
   model (`anthropic/…`) goes through the Anthropic client to OpenRouter's Messages API at `https://openrouter.ai/api`,
   everything Anthropic gets included (adaptive thinking with signed blocks replayed, effort, the two breakpoints);

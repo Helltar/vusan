@@ -33,7 +33,7 @@ internal data class CodexSignIn(val authFile: Path, val clientVersion: String?)
 
 /** Every model role this deployment runs on the plan: chat, fallback, vision, addressing. */
 internal fun AppConfig.codexRoles(): List<LlmProviderConfig.Codex> =
-    listOfNotNull(llmProvider, llmFallback, vision, addressing?.provider).filterIsInstance<LlmProviderConfig.Codex>()
+    listOfNotNull(llmProvider, llmFallback, vision, (addressing?.judge as? AddressingJudge.Llm)?.provider).filterIsInstance<LlmProviderConfig.Codex>()
 
 /**
  * The plan's sign-in wherever the plan is used, a model role or images alone. One account serves all, so the

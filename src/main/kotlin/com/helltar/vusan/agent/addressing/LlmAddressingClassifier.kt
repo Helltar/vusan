@@ -45,7 +45,21 @@ class LlmAddressingClassifier(
     }
 }
 
-internal fun addressingSystemPrompt(botNames: List<String>, busy: Boolean): String {
+internal fun addressingSystemPrompt(botNames: List<String>, busy: Boolean): String =
+    buildString {
+        append("You decide one thing about a group chat message.\n\n")
+        append("Question: ${addressingQuestion(botNames)}\n\n")
+        append("true: $ADDRESSED_WHEN\n")
+        append("false: $NOT_ADDRESSED_WHEN\n\n")
+
+        // never measured: added so a person chatting on while the bot works on their request is not read as
+        // ending the conversation
+        if (busy) append("$BUSY_NOTE\n\n")
+
+        append(ANSWER_FORMAT)
+    }
+
+internal fun addressingQuestion(botNames: List<String>): String {
     val name = botNames.first()
 
     // the chat may spell the name in another script, and the model must know both mean the bot
@@ -56,20 +70,7 @@ internal fun addressingSystemPrompt(botNames: List<String>, busy: Boolean): Stri
             ?.joinToString(", ", prefix = " (written ", postfix = " in the chat)") { "«$it»" }
             .orEmpty()
 
-    return buildString {
-        append("You decide one thing about a group chat message.\n\n")
-        append("Question: Is new_message said TO the chat bot $name$spellings, so that the bot should reply to it?\n\n")
-        append(ADDRESSED_WHEN)
-        append('\n')
-        append(NOT_ADDRESSED_WHEN)
-        append("\n\n")
-
-        // never measured: added so a person chatting on while the bot works on their request is not read as
-        // ending the conversation
-        if (busy) append("$BUSY_NOTE\n\n")
-
-        append(ANSWER_FORMAT)
-    }
+    return "Is new_message said TO the chat bot $name$spellings, so that the bot should reply to it?"
 }
 
 // the state names no times: the model reads numbers as text, and anything old enough to be irrelevant was
@@ -105,13 +106,13 @@ private const val MAX_LINE_CHARS = 500
 
 private val VERDICT = Regex(""""addressed"\s*:\s*(true|false)""")
 
-private const val ADDRESSED_WHEN =
-    "true: The author speaks to the bot in the second person: asks it, tells it to do something, greets, " +
+internal const val ADDRESSED_WHEN =
+    "The author speaks to the bot in the second person: asks it, tells it to do something, greets, " +
             "thanks or argues with it — by its name, by a generic word such as «бот», or with no name at all " +
             "when the message continues the author's exchange with the bot or picks up the bot's latest answer."
 
-private const val NOT_ADDRESSED_WHEN =
-    "false: The message is for a human or for the whole chat. " +
+internal const val NOT_ADDRESSED_WHEN =
+    "The message is for a human or for the whole chat. " +
             "That includes messages that only talk ABOUT the bot in the third person, that tell someone else to " +
             "ask the bot, or that address a person by name and merely mention the bot; the bot's name appearing " +
             "in the text is not enough. " +

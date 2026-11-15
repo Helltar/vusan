@@ -7,6 +7,7 @@ import com.helltar.vusan.agent.ContextWindowPolicy
 import com.helltar.vusan.agent.DEFAULT_PERSONALITY
 import com.helltar.vusan.agent.TurnSurroundings
 import com.helltar.vusan.agent.addressing.AmbientAddressing
+import com.helltar.vusan.agent.addressing.JevAddressingClassifier
 import com.helltar.vusan.agent.addressing.LlmAddressingClassifier
 import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.agent.conversation.LlmConversationCompactor
@@ -30,6 +31,8 @@ import com.helltar.vusan.llm.FallbackInUse
 import com.helltar.vusan.llm.FallbackLlmClient
 import com.helltar.vusan.llm.LlmClient
 import com.helltar.vusan.llm.codex.CodexAuthStore
+import com.helltar.vusan.llm.llmHttpClient
+import com.helltar.vusan.llm.typesafe.SystemOneClient
 import com.helltar.vusan.llm.codex.claimCodexClientVersion
 import com.helltar.vusan.request.ChatRef
 import com.helltar.vusan.stt.OpenAiWhisperClient
@@ -88,7 +91,7 @@ suspend fun main() = coroutineScope {
     var publicHttp: HttpClient? = null
     var chatClient: LlmClient? = null
     var visionClient: LlmClient? = null
-    var addressingClient: LlmClient? = null
+    var addressingClient: AutoCloseable? = null
 
     try {
         Db.connect(config)
@@ -169,11 +172,24 @@ suspend fun main() = coroutineScope {
         val ambient =
             config.addressing?.let { addressing ->
                 val transcript = checkNotNull(groupLog) { "answering without a mention needs the group log" }
-                val runtime = resolveAddressingRuntime(addressing.copy(provider = addressing.provider.preflighted(http, codexAuth)), codexAuth)
-                addressingClient = runtime.client
+
+                val classifier =
+                    when (val judge = addressing.judge) {
+                        is AddressingJudge.Llm -> {
+                            val runtime = resolveAddressingRuntime(judge.provider.preflighted(http, codexAuth), codexAuth)
+                            addressingClient = runtime.client
+                            LlmAddressingClassifier(runtime.client, runtime.model, runtime.options)
+                        }
+
+                        is AddressingJudge.Jev -> {
+                            val client = SystemOneClient(llmHttpClient(AddressingConfig.VERDICT_TIMEOUT), judge.apiKey)
+                            addressingClient = client
+                            JevAddressingClassifier(client.verified(judge), judge.model)
+                        }
+                    }
 
                 AmbientAddressing(
-                    LlmAddressingClassifier(runtime.client, runtime.model, runtime.options),
+                    classifier,
                     transcript,
                     botProfile.addressingNames(addressing.names),
                     leaveAlone,
@@ -536,7 +552,7 @@ private fun logStartup(
     log.info { if (groupLogOn) "Group log: on retentionDays=[${config.groupLog.retentionDays}]" else "Group log: off (GROUP_LOG_ENABLED=false)" }
 
     log.info {
-        config.addressing?.let { "Ambient addressing: model=[${it.provider.model}] names=[${ambientNames.orEmpty().joinToString(", ")}]" }
+        config.addressing?.let { "Ambient addressing: model=[${it.judge.model}] names=[${ambientNames.orEmpty().joinToString(", ")}]" }
             ?: "Ambient addressing: off (ADDRESSING_ENABLED not true)"
     }
 

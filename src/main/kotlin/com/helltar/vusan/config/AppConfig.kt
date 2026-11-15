@@ -1,6 +1,7 @@
 package com.helltar.vusan.config
 
 import com.helltar.vusan.config.llm.AddressingConfig
+import com.helltar.vusan.config.llm.AddressingJudge
 import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.config.llm.ServiceTier
 import com.helltar.vusan.llm.ReasoningEffort
@@ -84,6 +85,7 @@ data class AppConfig(
         private const val LLM_FALLBACK_PREFIX = "LLM_FALLBACK"
         private const val VISION_PREFIX = "VISION"
         private const val ADDRESSING_PREFIX = "ADDRESSING"
+        private const val TYPESAFE_PROVIDER = "typesafe"
         private const val DEFAULT_MAX_CONCURRENT_TURNS = 8
 
         private val dotenv = dotenv { ignoreIfMissing = true }
@@ -198,13 +200,22 @@ data class AppConfig(
                 return null
             }
 
-            val provider =
-                requireNotNull(resolveRole(ADDRESSING_PREFIX, chat)) {
+            val model =
+                requireNotNull(readEnv("ADDRESSING_MODEL")) {
                     "ADDRESSING_MODEL is required when ADDRESSING_ENABLED is true: the verdicts run on a model of their own"
                 }
 
+            // no chat provider: its models answer with a probability, so only this role can run on one
+            val judge =
+                if (readEnv("ADDRESSING_PROVIDER")?.trim()?.lowercase() == TYPESAFE_PROVIDER) {
+                    AddressingJudge.Jev(apiKey = requireEnv("ADDRESSING_API_KEY"), model = model)
+                } else {
+                    val provider = checkNotNull(resolveRole(ADDRESSING_PREFIX, chat))
+                    AddressingJudge.Llm(provider.withRequestTimeout(AddressingConfig.VERDICT_TIMEOUT))
+                }
+
             return AddressingConfig(
-                provider = provider.withRequestTimeout(AddressingConfig.VERDICT_TIMEOUT),
+                judge = judge,
                 names = readEnv("ADDRESSING_NAMES")?.split(',')?.map(String::trim)?.filter(String::isNotEmpty).orEmpty(),
             )
         }

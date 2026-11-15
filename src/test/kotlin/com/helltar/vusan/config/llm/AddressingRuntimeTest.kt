@@ -4,6 +4,8 @@ import com.helltar.vusan.infra.Http
 import com.helltar.vusan.llm.ReasoningEffort
 import com.helltar.vusan.llm.openai.OpenAiEndpoint
 import com.helltar.vusan.llm.codex.CodexAuthStore
+import com.helltar.vusan.llm.typesafe.SystemOneClient
+import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
@@ -14,6 +16,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
@@ -42,7 +45,7 @@ class AddressingRuntimeTest {
         )
 
     private fun effortOf(provider: LlmProviderConfig, codexAuth: CodexAuthStore? = null, refusingNone: Set<String> = emptySet()): ReasoningEffort? =
-        runBlocking { resolveAddressingRuntime(AddressingConfig(provider, names = emptyList()), codexAuth, platform(refusingNone)).options.reasoningEffort }
+        runBlocking { resolveAddressingRuntime(provider, codexAuth, platform(refusingNone)).options.reasoningEffort }
 
     private fun openAi(model: String, effort: ReasoningEffort? = null) =
         LlmProviderConfig.OpenAi(apiKey = "key", model = model, reasoningEffort = effort, requestTimeout = TIMEOUT)
@@ -90,6 +93,23 @@ class AddressingRuntimeTest {
     fun `an effort the deployment set wins, and nothing is asked`() {
         assertEquals(ReasoningEffort.HIGH, effortOf(openAi("gpt-5.6-luna", effort = ReasoningEffort.HIGH)))
         assertTrue(asked.isEmpty())
+    }
+
+    // a wrong key or model id would otherwise fail every verdict where nobody looks
+    @Test
+    fun `a jev key or model typesafe refuses stops startup, a failing server does not`() {
+        val judge = AddressingJudge.Jev(apiKey = "key", model = "jev-1.14.0")
+
+        fun typeSafe(status: HttpStatusCode, reply: String) = SystemOneClient(HttpClient(MockEngine { respond(reply, status, JSON) }), apiKey = "key")
+
+        runBlocking {
+            typeSafe(HttpStatusCode.OK, """{"model":"jev-1.14.0","answers":{"greeting":{"type":"noul","noul":0.9}}}""").verified(judge)
+            typeSafe(HttpStatusCode.InternalServerError, "down").verified(judge)
+            typeSafe(HttpStatusCode.TooManyRequests, "slow down").verified(judge)
+
+            assertFailsWith<IllegalStateException> { typeSafe(HttpStatusCode.Unauthorized, """{"detail":"Invalid API key"}""").verified(judge) }
+            assertFailsWith<IllegalStateException> { typeSafe(HttpStatusCode.BadRequest, """{"detail":"Unknown model"}""").verified(judge) }
+        }
     }
 
     private companion object {

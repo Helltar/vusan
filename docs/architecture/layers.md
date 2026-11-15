@@ -43,7 +43,9 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   while the first is out, and the reasoning blocks an endpoint returns are kept raw and replayed verbatim to that endpoint
   alone — the platform, the Codex backend and a compatible server speak one protocol, and none reads another's. The
   clients own their data shapes — adding a field the API grew is one line, and a block type a reply carries that nobody
-  reads yet is skipped with a warning rather than failing the call.
+  reads yet is skipped with a warning rather than failing the call. `llm/typesafe/SystemOneClient` is the one client
+  that is no `LlmClient`: TypeSafe's models write no text, so a call is a state and named yes-or-no questions, each
+  answered with a probability.
 - **`agent/`** — agent orchestration. `AgentRunner` serializes the turns of one conversation, assembles
   the current user turn (chat metadata + durable memory + request), and owns every history write for it, so no other
   layer appends or clears turns behind a running turn's back. What it orchestrates sits beside it, one file per concern:
@@ -134,7 +136,8 @@ that is who owns writing them, not because only `agent/` reads them. No other ar
   `OpenAiCompatibleProvider`, `CodexProvider`, `OpenRouterProvider`, `GoogleProvider`, `DeepSeekProvider`, `XaiProvider`), and the two roles on a model of
   their own. `VisionRuntime` resolves which model looks at images: the `VISION_*` model when configured, the chat
   model when it accepts images, and nothing at all otherwise — which leaves the vision tools and sticker catalog
-  unavailable. `AddressingRuntime` resolves the model that decides whether an unmentioned message is for the bot.
+  unavailable. `AddressingRuntime` resolves the model that decides whether an unmentioned message is for the bot: an
+  `AddressingJudge`, either one more `LlmProviderConfig` or TypeSafe's Jev with a key of its own.
 - **`stt/`** — OpenAI speech-to-text client (`OpenAiWhisperClient`, default model `gpt-transcribe`); used for voice
   transcription and for the sound of a video the vision tool watches, opt-in via `OPENAI_STT_API_KEY`.
 - **`i18n/`** — user-facing message strings: the `Messages` interface, and one implementation per `Language` in a file

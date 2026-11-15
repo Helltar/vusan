@@ -63,7 +63,9 @@ turn starts from. Next: [running a turn](turn.md).
    five minutes and that line is among the six the classifier is shown, read from the group log; nothing else leaves
    the machine. The follow-up door is the bot's own guess, and it stays shut for a person who asked to be left alone
    (`agent/presence/LeaveAloneRepository`); the name door is theirs like anybody's. A failure, a timeout, an unreadable
-   answer or a chat over twenty checks a minute all mean no, so it can
+   answer or a chat over twenty checks a minute all mean no. The classifier is a chat model asked for a JSON verdict
+   (`LlmAddressingClassifier`) or, on `ADDRESSING_PROVIDER=typesafe`, Jev asked the same wording about the same state
+   and answering with a probability that code cuts at 0.7 (`JevAddressingClassifier`). Either way it can
    add answers and never take one away, and it costs nothing to a message the bot answers today. A yes is claimed like
    any other message and runs as an ordinary turn with `RequestContext.ambient` set.
 3. **Normalize** — text is sanitized (`MessageSanitizer`); voice/audio is transcribed (`VoiceTranscriber` → `stt/`);

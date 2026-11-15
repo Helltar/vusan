@@ -1,6 +1,7 @@
 package com.helltar.vusan.config
 
 import com.helltar.vusan.config.llm.AddressingConfig
+import com.helltar.vusan.config.llm.AddressingJudge
 import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.request.AccessPolicy
 import com.helltar.vusan.request.PlatformLimits
@@ -127,7 +128,7 @@ class AppConfigTest {
     fun `answering without a mention stops the startup without the group log`() {
         val addressing =
             AddressingConfig(
-                provider = LlmProviderConfig.OpenAi(apiKey = "key", model = "gpt-6-luna", requestTimeout = 30.seconds, envPrefix = "ADDRESSING"),
+                judge = AddressingJudge.Llm(LlmProviderConfig.OpenAi(apiKey = "key", model = "gpt-6-luna", requestTimeout = 30.seconds, envPrefix = "ADDRESSING")),
                 names = emptyList(),
             )
 
