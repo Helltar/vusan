@@ -25,7 +25,7 @@ internal const val SANDBOX_COMMAND = "sandbox"
  * Publishes the command menu telegram shows beside the input field, one list per [Language].
  *
  * It is the same list BotFather's `/setcommands` writes, so it is republished on every start and a BotFather
- * edit lasts only until the next one. Adding a command to `TelegramCommands` is all it takes to offer it.
+ * edit lasts only until the next one.
  *
  * `/start` is left out on purpose: telegram opens a fresh chat with it anyway. `/sandbox` is listed only
  * where [sandbox] says a server is configured, which is where `TelegramCommands` answers it.

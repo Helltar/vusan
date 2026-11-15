@@ -19,7 +19,7 @@ import java.time.Instant
  *
  * A request is what a person said in their own words («leave me alone», «stop writing to me»), recorded by
  * the turn that heard it. It stops only what the bot would send them unasked: a look's reaction or line, a
- * follow-up it guessed was for them. Messages they send the bot are answered as before.
+ * follow-up it guessed was for them. Messages they send the bot are answered as usual.
  *
  * Stored in the database because it is a promise that must survive a restart. A request past its end is as
  * good as gone; maintenance drops it.

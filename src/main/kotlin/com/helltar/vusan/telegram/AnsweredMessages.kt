@@ -8,7 +8,7 @@ import kotlin.time.Duration
  * The messages the bot took a turn on, so it never takes a second. Every write drops what aged out, so
  * retention also bounds the map.
  *
- * Per process on purpose: after a restart nothing is known, as before this existed.
+ * Per process on purpose: after a restart nothing is known.
  */
 internal class AnsweredMessages(private val retention: Duration) {
 

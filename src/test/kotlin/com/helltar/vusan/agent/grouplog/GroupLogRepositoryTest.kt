@@ -191,7 +191,7 @@ class GroupLogRepositoryTest {
     }
 
     // the bot's rows have no message id, and `!=` against null is null in SQL: without the null arm,
-    // excluding the triggering message dropped every bot reply.
+    // excluding the triggering message would drop every bot reply.
     @Test
     fun `recent keeps the bot's own messages while dropping the triggering one`() = runBlocking {
         val repository = GroupLogRepository(GroupLogConfig())
@@ -232,8 +232,8 @@ class GroupLogRepositoryTest {
         val fresh = Instant.now()
         repeat(5) { repository.record(entry(messageId = "${1_000 + it}", text = "new$it", at = fresh)) }
 
-        // retention is its own pass: nothing a chat writes prunes it, which left a quiet chat holding
-        // everything.
+        // retention is its own pass: otherwise only what a chat writes prunes it, and a quiet chat would
+        // hold everything.
         assertEquals(1, repository.pruneExpired(maxChats = 10))
 
         assertEquals(0L, repository.countInWindow(CHAT, stale.minusSeconds(60), stale.plusSeconds(60)))

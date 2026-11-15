@@ -52,7 +52,7 @@ interface StickerShortlist {
  * Code decides whether to look, a model decides what comes of it. A chat is looked at only while people are
  * writing, after a random pause around the configured interval, outside quiet hours, when there is something
  * new and the bot is not already in the conversation. A look sends the group's recent lines to the model
- * unasked, which is why it is opt-in and limited to chats [isAllowed] still admits.
+ * unasked, which is why it is limited to chats [isAllowed] still admits.
  *
  * It can only add something: a failure, timeout or unreadable answer is silence, and the daily output is
  * bounded whatever the model wants. A person who asked to be left alone is out of reach by code: their lines
@@ -176,8 +176,8 @@ class Initiative(
 
         if (skip != null) {
             // the last look stays where it was, so what was said meanwhile is still new. a skip cost no model
-            // call, so it retries soon instead of waiting a full pause, which left a chat that keeps calling
-            // the bot hardly any looks
+            // call, so it retries soon instead of waiting a full pause, which would leave a chat that keeps
+            // calling the bot hardly any looks
             if (skip != BUDGET_SPENT) state.nextLookAt = now + retryPause()
 
             log.info { "initiative skip: chat=[$chat] reason=[$skip] fresh=[$fresh]" }

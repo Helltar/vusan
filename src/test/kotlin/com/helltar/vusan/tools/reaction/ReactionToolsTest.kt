@@ -100,7 +100,7 @@ class ReactionToolsTest {
         assertTrue(outbox.pending.isEmpty())
     }
 
-    // an omitted emoji is now the decoder's complaint, the argument being required
+    // an omitted emoji is the decoder's complaint, the argument being required
     @Test
     fun `setReaction fails when the emoji argument is blank`() = runBlocking {
         val outbox = BotOutbox()

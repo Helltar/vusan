@@ -80,8 +80,8 @@ class PollRegistryTest {
     @Test
     fun `a poll old enough to be forgotten is dropped by the maintenance pass`() = runBlocking<Unit> {
         registry.remember("p1", chatId = -100L, output = quiz)
-        // retention no longer waits for the next poll: a chat asking one question and stopping kept it
-        // forever.
+        // retention does not wait for the next poll, or a chat asking one question and stopping would keep
+        // it forever.
         delay(10)
         val between = Instant.now()
         delay(10)

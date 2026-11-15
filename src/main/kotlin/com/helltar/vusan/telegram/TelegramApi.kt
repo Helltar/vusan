@@ -76,7 +76,7 @@ internal class LocalFileTooBigException(path: String, sizeBytes: Long) :
 //
 // a local bot api server answers getFile with the absolute path of the file on its own disk and serves no
 // download, so the file is read from there: the bot mounts the server's directory at the same path. telegram's
-// own server answers with a relative path, which is downloaded as before.
+// own server answers with a relative path, which is downloaded.
 internal suspend fun TelegramClient.downloadFileById(fileId: String): TelegramFile {
     val file = api { executeAsync(GetFile.builder().fileId(fileId).build()) }
     val localPath = file.filePath?.takeIf { it.startsWith('/') }?.let(::Path)

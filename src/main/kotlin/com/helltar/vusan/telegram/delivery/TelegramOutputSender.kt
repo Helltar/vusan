@@ -218,7 +218,7 @@ internal object TelegramOutputSender {
             return
         }
 
-        // a remote animation by URL (e.g. Giphy).
+        // a remote animation by URL (e.g. giphy).
         val url = requireNotNull(animation.url)
 
         sendOrFallback(

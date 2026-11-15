@@ -77,7 +77,7 @@ internal class TelegramCommands(
 
         // in a group the menu is one person's business, so it is shown to them alone. a client that knows the
         // command is ephemeral sends it so; an older one sends a plain message, which only an administrator
-        // may answer privately, so the menu goes out in the open as before
+        // may answer privately, so the menu goes out in the open
         val forSenderOnly = !message.isPrivateChat
 
         // the menu goes straight to the bot api with no delivery fallback chain; without this a rejected send

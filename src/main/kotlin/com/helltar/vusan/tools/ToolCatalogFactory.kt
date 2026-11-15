@@ -94,8 +94,8 @@ class ToolCatalogFactory(
     // only where the deployment keeps a diary
     private val diary: DiaryRepository?,
     toolResultMaxChars: Int,
-    // only on LLM_PROVIDER=codex: image generation and web search ride the ChatGPT session instead of a
-    // second paid key.
+    // the ChatGPT sign-in wherever a model role or the pictures run on the plan: web search and image
+    // generation ride it instead of a second paid key.
     codexAuth: CodexAuthStore? = null,
     private val selfImage: SelfImage? = null,
 ) {
@@ -230,7 +230,6 @@ class ToolCatalogFactory(
      * that do nothing but post (reactions, polls, GIFs by address) are left out here.
      *
      * A [ToolGroup] only decides whether a set's schemas ride along in every request or wait for `loadTools`.
-     * Group what a turn rarely needs, and leave visible what one may need without being asked for it by name.
      */
     fun buildCatalog(
         context: RequestContext,

@@ -45,9 +45,9 @@ class ContextWindowPolicy(model: LlmModel) {
     private val agentReserveTokens: Int = (contextWindowTokens / 4).coerceIn(1_024, 64_000)
 
     // all tool results of one run must fit the agent reserve, counted in the same estimated tokens as the
-    // rest of the budget. counting characters made a cyrillic result cost the run half what it cost the
-    // prompt; a fixed ceiling would starve a large-window model, where one YouTube transcript would take the
-    // whole run.
+    // rest of the budget. counting characters would make a cyrillic result cost the run half what it costs
+    // the prompt; a fixed ceiling would starve a large-window model, where one youtube transcript would take
+    // the whole run.
     val liveToolResultMaxTokens: Int = agentReserveTokens
 
     // the same reserve in characters, for tools that render to a size before anything can estimate it;

@@ -112,8 +112,8 @@ class TurnPromptTest {
         assertTrue(prompt.endsWith("hello"))
     }
 
-    // both used to be a second system message, which reads as a higher-priority instruction and which the
-    // anthropic api lifts into its top-level system field.
+    // not a second system message, which reads as a higher-priority instruction and which the anthropic api
+    // lifts into its top-level system field.
     @Test
     fun `the clock and the sticker index ride in the turn, ahead of the request`() {
         val prompt =

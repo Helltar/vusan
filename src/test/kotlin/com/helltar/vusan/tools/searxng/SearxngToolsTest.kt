@@ -67,7 +67,7 @@ class SearxngToolsTest {
 
     @Test
     fun `blank language and time range are left out of the request`() = runBlocking {
-        // SearXNG answers an empty `language` or an unknown `time_range` with a 400, so neither may go out as
+        // searxng answers an empty `language` or an unknown `time_range` with a 400, so neither may go out as
         // an empty string.
         val probe = SearchProbe()
         tools(resultsJson("https://a"), probe = probe).metaSearch("kotlin", timeRange = "", language = "")
@@ -169,7 +169,7 @@ class SearxngToolsTest {
 
     @Test
     fun `image search pins the engine list and sends no category`() = runBlocking {
-        // SearXNG ignores `engines` with `categories=images` and re-adds the category's stock-photo and icon
+        // searxng ignores `engines` with `categories=images` and re-adds the category's stock-photo and icon
         // engines, flooding the results.
         val probe = SearchProbe()
         tools(imagesJson(1), probe = probe, image = png()).metaSearchImages("red panda")

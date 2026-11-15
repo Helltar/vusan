@@ -30,7 +30,7 @@ sealed class BotOutput {
 
     // an opt-in Bot API 10.1 rich message for large, structured replies (long comparisons, tables,
     // multi-section documents). [markdown] is github-flavored; delivery falls back to a .md document on
-    // rejection. some third-party clients (e.g. Telegram X) show rich messages as unsupported, so HTML [Text]
+    // rejection. some third-party clients (e.g. telegram x) show rich messages as unsupported, so HTML [Text]
     // stays the default.
     data class RichMessage(val markdown: String) : BotOutput() {
         init {

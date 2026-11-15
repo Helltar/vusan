@@ -103,7 +103,7 @@ internal class TelegramBotRunner(
     // what the attachment blocks point the model to a sandbox by
     private val sandboxClient: SandboxClient? = null,
     private val floor: ChatFloor = ChatFloor(),
-    // where the bot api is served: telegram's own server, or a local one the bot was moved to
+    // where the bot api is served: telegram's own server, or a local one
     private val telegramUrl: TelegramUrl = TelegramUrl.DEFAULT_URL,
     // shared with the task menu, so what one status learns about custom emoji holds for every button
     private val icons: InterfaceIcons = InterfaceIcons(),
@@ -211,7 +211,7 @@ internal class TelegramBotRunner(
         val pending = linkedMapOf<String, PendingBatch>()
 
         // a run of lines is one message to the agent when any of them calls the bot. an unaddressed run is
-        // handled line by line, so ambient addressing judges single lines as before.
+        // handled line by line, so ambient addressing judges single lines.
         fun flushLines(parts: List<Message>) {
             if (parts.size > 1 && parts.any { shouldHandle(it, profile.userId, profile.usernames) })
                 launchHandling(parts.last()) { handleTextBatch(parts, profile) }

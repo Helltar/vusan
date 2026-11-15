@@ -140,7 +140,7 @@ class SearxngTools(
         // an unknown time_range is a 400, unlike an unknown category, so this is a hard guard
         val allowedTimeRanges = setOf("day", "week", "month", "year")
 
-        // SearXNG mixes stock-photo and icon engines (unsplash, pexels, artic, devicons, lucide) into every
+        // searxng mixes stock-photo and icon engines (unsplash, pexels, artic, devicons, lucide) into every
         // image query, so `blackpink` returns an 1878 self-portrait. pinning the engines is the only filter
         // that works: `engines` with `categories=images` is ignored, the category re-adding its own.
         const val IMAGE_ENGINES = "duckduckgo images,bing images,google cse images,wikicommons.images,flickr"

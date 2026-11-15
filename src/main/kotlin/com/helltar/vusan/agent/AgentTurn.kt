@@ -47,10 +47,9 @@ class ModelRefusal(val reason: String?) : RuntimeException("the model declined t
  * Adjacent read-only calls in a batch run side by side; anything that writes keeps its place. Results are
  * recorded in batch order either way.
  *
- * The guards against flaky models are listed in `docs/architecture/turn.md` under Act: empty-argument calls
- * answered with a validation error, a reply cut by the output ceiling runs none of its calls, a turn that
- * delivered nothing gets one nudge (deliberate silence goes through `staySilent`), and an announced plan left
- * undone is sent back once.
+ * The guards against flaky models: empty-argument calls answered with a validation error, a reply cut by the
+ * output ceiling runs none of its calls, a turn that delivered nothing gets one nudge (deliberate silence
+ * goes through `staySilent`), and an announced plan left undone is sent back once.
  *
  * When the turn's own tool results outgrow the window, the oldest are folded away (`foldedToFit`) so long
  * work does not die on the context limit.

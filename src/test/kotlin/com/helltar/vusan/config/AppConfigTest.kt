@@ -33,7 +33,7 @@ class AppConfigTest {
 
     @Test
     fun `a mistyped number stops the startup instead of restoring the default`() {
-        // the digit-oh typo is the point: it used to read as unset and bring back the default
+        // the digit-oh typo is the point: read as unset, it would bring back the default
         val failure = assertFailsWith<IllegalStateException> { parseIntEnv("AGENT_MAX_MODEL_CALLS", "7O") }
 
         assertContains(failure.message.orEmpty(), "AGENT_MAX_MODEL_CALLS")
@@ -56,7 +56,7 @@ class AppConfigTest {
 
     @Test
     fun `a boolean spelled some other way never reads as the default`() {
-        // silently defaulting here kept the group transcript recording after it was turned off
+        // silently defaulting here would keep the group transcript recording after it was turned off
         listOf("0", "1", "no", "yes", "off", "on", "disabled").forEach { raw ->
             val failure = assertFailsWith<IllegalStateException> { parseBooleanEnv("GROUP_LOG_ENABLED", raw) }
 

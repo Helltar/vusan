@@ -7,8 +7,8 @@ import kotlin.test.assertTrue
 
 class TelegramProgressTest {
 
-    // a few seconds of work once earned a status bubble with a stop button, so looking at a just-sent photo
-    // was answered as a progress UI.
+    // a few seconds of work must not earn a status bubble with a stop button, or looking at a just-sent photo
+    // reads as a progress UI.
     @Test
     fun `an activity that is part of the exchange waits far longer than a job`() {
         val job = statusGraceFor(ToolActivity.RUNNING_CODE)

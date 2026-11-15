@@ -52,7 +52,7 @@ class ImageDownloadClient(private val downloader: FileDownloadClient) {
     }
 }
 
-// SearXNG's flickr engine returns protocol-relative URLs (`//live.staticflickr.com/...`), which ktor cannot
+// searxng's flickr engine returns protocol-relative URLs (`//live.staticflickr.com/...`), which ktor cannot
 // resolve without a scheme.
 private fun String.withScheme(): String =
     if (startsWith("//")) "https:$this" else this

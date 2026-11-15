@@ -27,9 +27,8 @@ private val log = KotlinLogging.logger("ChatProfiles")
  * both need them before the agent runs; otherwise a task pays for a whole run before learning the chat
  * refuses its output.
  *
- * The cache makes that affordable (the description used to cost a `getChat` every turn), and [forget] keeps
- * it honest, since membership changes are announced. Chats that cannot restrict anything skip this, so a
- * private chat costs no call.
+ * The cache spares a `getChat` per turn for the description, and [forget] keeps it honest, since membership
+ * changes are announced. Chats that cannot restrict anything skip this, so a private chat costs no call.
  */
 class ChatProfiles(
     private val client: TelegramClient,
@@ -75,7 +74,6 @@ class ChatProfiles(
 
     // a failed lookup leaves the chat looking unrestricted on purpose: guessing "forbidden" from a blip would
     // strip tools the agent has, and the send fallbacks still cover a real refusal.
-    // a refusal that turns out to be real.
     private suspend fun <T> call(chatId: Long, label: String, block: TelegramClient.() -> java.util.concurrent.CompletableFuture<T>): T? =
         runCatching { client.api(block) }
             .onFailure { error ->

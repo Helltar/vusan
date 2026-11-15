@@ -110,7 +110,7 @@ class FfmpegVideoNoteRenderer(
         const val RAIL_HEIGHT = 3
         const val RAIL_Y = (WAVE_HEIGHT - RAIL_HEIGHT) / 2
 
-        // upscaling a drawn column also upscales its anti-aliased ends, which made the old line look
+        // upscaling a drawn column also upscales its anti-aliased ends, which makes the line look
         // scratched; anything fainter is dropped, so a bar either reaches a row or does not.
         const val ALPHA_FLOOR = 80
 

@@ -38,7 +38,7 @@ data class AmbientCandidate(
  * or a follow-up to what it just answered.
  *
  * It can only add answers. Mentions, replies and commands are decided first, and a failure, timeout or a chat
- * over its rate all mean "not addressed", which is how the bot behaved without this.
+ * over its rate all mean "not addressed", the same as having no classifier.
  *
  * Code decides whether to ask, a model decides the answer. A message reaches the model only when it names the
  * bot, its author is still waiting on the bot, or the bot spoke within [FOLLOW_UP_WINDOW] and that line is in

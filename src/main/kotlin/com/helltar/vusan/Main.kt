@@ -256,8 +256,8 @@ suspend fun main() = coroutineScope {
         val conversationCompactor =
             LlmConversationCompactor(client, llm.model, llm.compactionOptions, contextWindowPolicy)
 
-        // both read a group's transcript unasked, so each has its own switch, and neither looks into a chat
-        // the allowlist dropped.
+        // the diary and the initiative read a group's transcript unasked, so neither looks into a chat the
+        // allowlist dropped.
         val personality = config.personality ?: DEFAULT_PERSONALITY
         val isAllowedChat = { chat: ChatRef -> config.accessPolicy.allows(chat, user = null) }
 
@@ -365,7 +365,6 @@ suspend fun main() = coroutineScope {
     }
 }
 
-// stamped into the jar manifest at build time; a classpath run (`./gradlew run`) has none and says so.
 // AppConfig has already checked it is an http(s) url with a host
 private fun telegramUrl(raw: String): TelegramUrl {
     val uri = URI(raw)

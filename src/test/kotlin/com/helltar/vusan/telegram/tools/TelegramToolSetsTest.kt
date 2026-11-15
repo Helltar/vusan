@@ -22,9 +22,9 @@ import kotlin.test.assertEquals
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 /**
- * The registry no longer knows telegram's own tools, so the sticker catalog's gate must hold here, and so must
- * the admin rights behind the settings and topic tools. The file tool is offered whatever the chat accepts:
- * `send=false` fetches for another tool, and the tool refuses a send the chat would drop.
+ * The shared registry does not know telegram's own tools, so the sticker catalog's gate must hold here, and so
+ * must the admin rights behind the settings and topic tools. The file tool is offered whatever the chat
+ * accepts: `send=false` fetches for another tool, and the tool refuses a send the chat would drop.
  */
 class TelegramToolSetsTest {
 
