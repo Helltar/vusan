@@ -276,12 +276,10 @@ suspend fun main() = coroutineScope {
             )
 
         val initiative =
-            config.initiative?.let { initiativeConfig ->
-                val transcript = groupLog ?: return@let null
-
+            groupLog?.let { transcript ->
                 Initiative(
                     LlmInitiativeMind(client, llm.model, llm.compactionOptions, personality),
-                    transcript, delivery, initiativeConfig, isAllowedChat,
+                    transcript, delivery, config.initiative, isAllowedChat,
                     isAnswering = agentRunner::hasTurnUnderWayIn,
                     diary = diary?.let { it::blockFor },
                     stickers = stickerCatalog,
@@ -548,10 +546,10 @@ private fun logStartup(
         log.info { "Diary: on — each group's closed day is written up by the chat model" }
 
         log.info {
-            config.initiative?.let {
+            config.initiative.let {
                 "Initiative: interval=[${it.intervalMinutes}m] maxMessagesPerDay=[${it.maxMessagesPerDay}] " +
                         "quietHours=[${it.quietHours.from}-${it.quietHours.until}]"
-            } ?: "Initiative: off (INITIATIVE_ENABLED=false)"
+            }
         }
     }
 

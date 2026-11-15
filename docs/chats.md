@@ -90,8 +90,8 @@ With [answering without a mention](configuration.md#answering-without-a-mention)
 
 ### Speaking on its own
 
-With [initiative](configuration.md#initiative) on, most looks end in nothing, which is the point: it
-should feel like a member of the chat, not a notification.
+Most [looks](configuration.md#initiative) end in nothing, which is the point: it should feel like a
+member of the chat, not a notification.
 
 - **When it looks** — at a chat someone wrote in during the last fifteen minutes, after a random
   pause of fifteen to forty-five minutes, with at least three new messages since its last look or

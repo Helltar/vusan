@@ -34,7 +34,7 @@ data class AppConfig(
     val giphyApiKey: String?,
     val klipyApiKey: String?,
     val groupLog: GroupLogConfig = GroupLogConfig(),
-    val initiative: InitiativeConfig? = null,
+    val initiative: InitiativeConfig = InitiativeConfig(),
     val llmProvider: LlmProviderConfig,
     val llmFallback: LlmProviderConfig? = null,
     val maxConcurrentTurns: Int,
@@ -113,7 +113,6 @@ data class AppConfig(
                 elevenLabsApiKey = elevenLabsKey,
                 giphyApiKey = readEnv("GIPHY_API_KEY"),
                 klipyApiKey = readEnv("KLIPY_API_KEY"),
-                initiative = resolveInitiative(),
                 llmProvider = llmProvider,
                 llmFallback = llmFallback,
                 maxConcurrentTurns = readIntEnv("MAX_CONCURRENT_TURNS") ?: DEFAULT_MAX_CONCURRENT_TURNS,
@@ -224,10 +223,6 @@ data class AppConfig(
                 envPrefix = prefix,
             )
         }
-
-        // on unless turned off; how often it looks and how much it says are the feature's own numbers.
-        private fun resolveInitiative(): InitiativeConfig? =
-            InitiativeConfig().takeIf { readBooleanEnv("INITIATIVE_ENABLED") != false }
 
         // the same settings under LLM_FALLBACK_, a provider answering while the first is out. a subscription
         // may stand on either side but not both: the CODEX_* settings and the signed-in account are one set.

@@ -8,8 +8,8 @@ package com.helltar.vusan.config
  * the bot does not speak on a clock. [maxMessagesPerDay] bounds what it writes into one chat unprompted;
  * reactions have their own ceiling.
  *
- * None of these is a setting: a deployment only switches initiative on or off, and these defaults are what it
- * runs on.
+ * None of these is a setting: initiative is on wherever the group log is, and these defaults are what it runs
+ * on.
  */
 data class InitiativeConfig(
     val intervalMinutes: Int = DEFAULT_INTERVAL_MINUTES,

@@ -406,13 +406,9 @@ It has no switch of its own: it is on wherever the [group log](#group-log) is, a
 
 ## Initiative
 
-In a group Vusan normally speaks only when spoken to. With this on, it also looks over a chat people
-are writing in and, now and then, reacts, says a line of its own or answers with one of the chat's
-stickers. It is on for every group in `ALLOWED_IDS`.
-
-| Variable             | Default | Description                                    |
-|----------------------|---------|------------------------------------------------|
-| `INITIATIVE_ENABLED` | `true`  | `false` keeps Vusan quiet until spoken to.     |
+In a group Vusan does not only speak when spoken to: it also looks over a chat people are writing in
+and, now and then, reacts, says a line of its own or answers with one of the chat's stickers, in
+every group in `ALLOWED_IDS`.
 
 - **What is sent** — up to sixty lines from the chat's last six hours go to the chat model, with
   nobody having asked, every fifteen to forty-five minutes while people write.
@@ -420,7 +416,8 @@ stickers. It is on for every group in `ALLOWED_IDS`.
   to eight in the morning, on the bot's clock.
 - **In the log** — each look leaves an `initiative look:` line with what it did and why.
 
-It needs the [group log](#group-log); with `GROUP_LOG_ENABLED=false` it stays off.
+It has no switch of its own: it is on wherever the [group log](#group-log) is, and
+`GROUP_LOG_ENABLED=false` turns it off with it.
 
 ## Rights in a group
 

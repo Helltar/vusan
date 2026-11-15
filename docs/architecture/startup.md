@@ -21,7 +21,7 @@ generation or `ELEVENLABS_API_KEY` is configured, the two things that use it) `r
 failed startup → (only with a vision runtime) the `StickerCatalog` → `TelegramDelivery` and `ChatProfiles`, then
 `TelegramToolSets` over them, the catalog and the client, `ToolCatalogFactory`, `AgentFactory`, `AgentRunner` → create `TaskMenuHandler` and `InlineChoiceHandler`, and
 optionally enable voice transcription → start `TelegramBotRunner`, which builds its own `AgentTurns` and
-`CallbackRouter` over those, and launch `TaskScheduler`, the sticker description worker and — where switched on — the
+`CallbackRouter` over those, and launch `TaskScheduler`, the sticker description worker and — where the group log is on — the
 `Diary` and `Initiative` loops, then block on the runner job
 until shutdown (closing the executor, HTTP client, and DB in `finally`).
 
