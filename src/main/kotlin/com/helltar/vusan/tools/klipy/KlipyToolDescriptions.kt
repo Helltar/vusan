@@ -25,4 +25,7 @@ internal object KlipyToolDescriptions {
     const val SEND =
         "Whether it goes to the chat; `true` by default. " +
                 "`false` fetches it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
+
+    const val SPOILER =
+        "`true` sends it under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
 }

@@ -76,6 +76,8 @@ class TavilyTools(
         maxResults: Int = 5,
         @Arg(TavilyToolDescriptions.SEARCH_IMAGES_SEND)
         send: Boolean = true,
+        @Arg(TavilyToolDescriptions.SEARCH_IMAGES_SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         if (send) outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
 
@@ -102,6 +104,7 @@ class TavilyTools(
             limit = capped,
             outbox = outbox,
             send = send,
+            spoiler = spoiler,
         )
     }
 

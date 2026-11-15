@@ -210,7 +210,7 @@ internal object TelegramOutputSender {
                 onTextFallback = captionTextFallback(client, target, caption, replyParameters),
                 send = {
                     sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
-                        sendAnimationFile(client, target, bytes.asInputFile(animation.filename), text, parseMode, replyParameters)
+                        sendAnimationFile(client, target, bytes.asInputFile(animation.filename), text, parseMode, replyParameters, animation.spoiler)
                     }
                 },
             )
@@ -227,7 +227,7 @@ internal object TelegramOutputSender {
             failureMessage = "sendAnimation failed, falling back to text",
             send = {
                 sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
-                    sendAnimationFile(client, target, InputFile(url), text, parseMode, replyParameters)
+                    sendAnimationFile(client, target, InputFile(url), text, parseMode, replyParameters, animation.spoiler)
                 }
             },
             onFallback = captionTextFallback(client, target, caption, replyParameters),
@@ -251,6 +251,7 @@ internal object TelegramOutputSender {
                                 .chatId(target.chatId)
                                 .messageThreadId(target.messageThreadId)
                                 .photo(photo.bytes.asInputFile(photo.filename))
+                                .hasSpoiler(photo.spoiler)
                                 .caption(text)
                                 .parseMode(parseMode)
                                 .replyParameters(replyParameters)
@@ -286,7 +287,7 @@ internal object TelegramOutputSender {
         failureMessage = "sendPhotoGroup failed, falling back to individual photos",
         send = {
             val media = group.photos.map {
-                InputMediaPhoto.builder().media(ByteArrayInputStream(it.bytes), it.filename).build()
+                InputMediaPhoto.builder().media(ByteArrayInputStream(it.bytes), it.filename).hasSpoiler(it.spoiler).build()
             }
             sendMediaGroup(client, target, media, replyParameters)
         },
@@ -469,6 +470,7 @@ internal object TelegramOutputSender {
                                 .video(video.bytes.asInputFile(video.filename))
                                 .thumbnail(thumbnail?.asInputFile(VIDEO_THUMBNAIL_FILENAME))
                                 .cover(thumbnail?.asInputFile(VIDEO_COVER_FILENAME))
+                                .hasSpoiler(video.spoiler)
                                 .caption(text)
                                 .parseMode(parseMode)
                                 .duration(video.durationSeconds)

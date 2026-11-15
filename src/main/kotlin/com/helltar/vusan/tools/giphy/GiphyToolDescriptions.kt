@@ -21,4 +21,7 @@ internal object GiphyToolDescriptions {
 
     const val ID =
         "The candidate's id, exactly as `searchGifs` returned it."
+
+    const val SPOILER =
+        "`true` sends the GIF under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
 }

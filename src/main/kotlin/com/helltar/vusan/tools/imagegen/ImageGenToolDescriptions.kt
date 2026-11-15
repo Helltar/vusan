@@ -38,6 +38,9 @@ internal object ImageGenToolDescriptions {
         "Whether the picture goes to the chat; `true` by default. " +
                 "`false` keeps it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
 
+    const val SPOILER =
+        "`true` sends the picture under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
+
     const val EDIT_IMAGE =
         "Edit the image or images attached to this turn (a photo the user sent, an album of them, or a replied-to image), or the ones `images` names, and send the result as one photo. " +
                 """Use when the user asks to change, modify, fix, retouch, add to, remove from, restyle, or recolor an image they provided ("remove the background", "add a hat to the cat", "make it look like winter", "turn this into a watercolor"). """ +
@@ -72,4 +75,7 @@ internal object ImageGenToolDescriptions {
     const val EDIT_SEND =
         "Whether the edited picture goes to the chat; `true` by default. " +
                 "`false` keeps it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
+
+    const val EDIT_SPOILER =
+        "`true` sends the edited picture under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
 }

@@ -49,6 +49,9 @@ internal object TavilyToolDescriptions {
         "Whether the images go to the chat; `true` by default. " +
                 "`false` keeps them for a later call instead, another tool or the sandbox, which takes each by the label the result names."
 
+    const val SEARCH_IMAGES_SPOILER =
+        "`true` sends the images under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
+
     const val EXTRACT_PAGE_CONTENT =
         "Fetch and extract the full text content of a web page by URL into your own context, through a service that renders the page first. " +
                 "This is the default page reader — use it to read a search result in full, to answer or summarize a page the user linked, or to quote it. " +

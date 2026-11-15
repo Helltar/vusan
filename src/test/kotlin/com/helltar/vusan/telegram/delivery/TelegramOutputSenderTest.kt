@@ -20,6 +20,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendSticker
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo
 import org.telegram.telegrambots.meta.api.objects.ApiResponse
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
+import org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException
@@ -240,6 +241,52 @@ class TelegramOutputSenderTest {
 
         assertEquals(listOf("sendAnimation", "sendDocument"), client.methods)
         assertEquals("clip.gif", assertIs<SendDocument>(client.requests.last()).document.mediaName)
+    }
+
+    @Test
+    fun `spoiler covers a photo, an album, a video and an animation`() = runBlocking {
+        val client = RecordingClient()
+        val bytes = byteArrayOf(1, 2, 3)
+
+        listOf(
+            BotOutput.Photo(bytes, "cat.png", spoiler = true),
+            BotOutput.PhotoGroup(listOf(BotOutput.Photo(bytes, "a.png", spoiler = true), BotOutput.Photo(bytes, "b.png"))),
+            BotOutput.Video(bytes, "clip.mp4", spoiler = true),
+            BotOutput.Animation(bytes = bytes, spoiler = true),
+            BotOutput.Animation(url = "https://example.com/loop.gif", spoiler = true),
+        ).forEach { item ->
+            TelegramOutputSender.send(
+                client = client.proxy,
+                item = item,
+                target = ChatTarget(1L),
+                replyParameters = null,
+                caption = null,
+                formattingFileNotice = "notice",
+            )
+        }
+
+        val requests = client.requests
+
+        assertEquals(true, assertIs<SendPhoto>(requests[0]).hasSpoiler)
+        assertEquals(listOf(true, false), assertIs<SendMediaGroup>(requests[1]).medias.map { (it as InputMediaPhoto).hasSpoiler })
+        assertEquals(true, assertIs<SendVideo>(requests[2]).hasSpoiler)
+        assertEquals(listOf(true, true), requests.drop(3).map { assertIs<SendAnimation>(it).hasSpoiler })
+    }
+
+    @Test
+    fun `media goes out uncovered unless asked`() = runBlocking {
+        val client = RecordingClient()
+
+        TelegramOutputSender.send(
+            client = client.proxy,
+            item = BotOutput.Photo(byteArrayOf(1, 2, 3), "cat.png"),
+            target = ChatTarget(1L),
+            replyParameters = null,
+            caption = null,
+            formattingFileNotice = "notice",
+        )
+
+        assertEquals(false, assertIs<SendPhoto>(client.requests.single()).hasSpoiler)
     }
 
     @Test

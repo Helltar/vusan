@@ -38,7 +38,8 @@ sealed class BotOutput {
         }
     }
 
-    class Photo(val bytes: ByteArray, val filename: String) : BotOutput() {
+    // [spoiler] covers a photo, a video or an animation until someone taps it; no other kind has one.
+    class Photo(val bytes: ByteArray, val filename: String, val spoiler: Boolean = false) : BotOutput() {
         override val acceptsCaption: Boolean get() = true
     }
 
@@ -66,6 +67,7 @@ sealed class BotOutput {
         val url: String? = null,
         val bytes: ByteArray? = null,
         val filename: String = "animation.gif",
+        val spoiler: Boolean = false,
     ) : BotOutput() {
         override val acceptsCaption: Boolean get() = true
 
@@ -104,6 +106,7 @@ sealed class BotOutput {
         val height: Int? = null,
         val thumbnail: ByteArray? = null,
         val sourceUrl: String? = null,
+        val spoiler: Boolean = false,
     ) : BotOutput() {
         override val acceptsCaption: Boolean get() = true
     }

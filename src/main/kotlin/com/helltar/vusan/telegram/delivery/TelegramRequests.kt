@@ -214,6 +214,7 @@ internal suspend fun sendAnimationFile(
     caption: String?,
     parseMode: String?,
     replyParameters: ReplyParameters?,
+    spoiler: Boolean,
 ) {
     client.api {
         executeAsync(
@@ -221,6 +222,7 @@ internal suspend fun sendAnimationFile(
                 .chatId(target.chatId)
                 .messageThreadId(target.messageThreadId)
                 .animation(animation)
+                .hasSpoiler(spoiler)
                 .caption(caption)
                 .parseMode(parseMode)
                 .replyParameters(replyParameters)

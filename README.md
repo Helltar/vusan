@@ -109,6 +109,7 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 - **Stop button** — ends a running answer from the progress message, in groups too.
 - **Inline choices** — asks for decisions or confirmation with buttons and continues when you tap.
 - **Reactions** — sometimes an emoji on your message is the whole answer.
+- **Spoilers** — hides a picture, video, GIF or part of a message under a spoiler, until tapped.
 - **Polls and quizzes** — creates polls and quizzes, and follows who answered what.
 - **Files** — sends documents, downloads links, and fetches the file behind a sticker or picture.
 - **Long structured answers** — formats longer replies with headings, tables, and checklists.

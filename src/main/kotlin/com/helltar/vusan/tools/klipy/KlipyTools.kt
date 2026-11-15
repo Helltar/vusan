@@ -72,6 +72,8 @@ class KlipyTools(
         id: String,
         @Arg(KlipyToolDescriptions.SEND)
         send: Boolean = true,
+        @Arg(KlipyToolDescriptions.SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         val key = id.trim()
         val candidate = requireNotNull(candidates[key]) { "unknown id [$key]: pass an id that `searchGifs` returned in this turn" }
@@ -86,7 +88,7 @@ class KlipyTools(
         require(sent.add(key)) { "this one is already sent in this turn" }
 
         val queued =
-            runCatching { outbox.enqueue(candidate.output()) }
+            runCatching { outbox.enqueue(candidate.output(spoiler)) }
                 .onFailure { sent.remove(key) }
                 .getOrThrow()
 
@@ -107,20 +109,20 @@ class KlipyTools(
 
     // a GIF goes out by address; pictures and videos the outbox takes only as bytes, and what was fetched is
     // kept for later calls.
-    private suspend fun Candidate.output(): BotOutput =
+    private suspend fun Candidate.output(spoiler: Boolean): BotOutput =
         when (kind) {
-            KlipyKind.GIF -> BotOutput.Animation(url)
+            KlipyKind.GIF -> BotOutput.Animation(url, spoiler = spoiler)
 
             KlipyKind.MEME ->
                 downloaded(kind.maxBytes).let {
                     keepOnShelf(it.filename, it.bytes)
-                    BotOutput.Photo(it.bytes, it.filename)
+                    BotOutput.Photo(it.bytes, it.filename, spoiler)
                 }
 
             KlipyKind.CLIP ->
                 downloaded(kind.maxBytes).let {
                     keepOnShelf(it.filename, it.bytes)
-                    BotOutput.Video(it.bytes, it.filename)
+                    BotOutput.Video(it.bytes, it.filename, spoiler = spoiler)
                 }
         }
 

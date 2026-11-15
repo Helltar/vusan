@@ -51,13 +51,15 @@ class GiphyTools(private val client: GiphyClient, private val outbox: BotOutbox)
     suspend fun sendGif(
         @Arg(GiphyToolDescriptions.ID)
         id: String,
+        @Arg(GiphyToolDescriptions.SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         val key = id.trim()
         val url = requireNotNull(candidates[key]) { "unknown GIF id [$key]: pass an id that `searchGifs` returned in this turn" }
 
         require(sent.add(key)) { "this GIF is already sent in this turn" }
 
-        if (!outbox.enqueue(BotOutput.Animation(url))) {
+        if (!outbox.enqueue(BotOutput.Animation(url, spoiler = spoiler))) {
             sent.remove(key)
             error("this chat does not accept GIFs, nothing was sent")
         }

@@ -40,6 +40,8 @@ class AnimationTools(
         withYourself: Boolean = false,
         @Arg(AnimationToolDescriptions.SEND)
         send: Boolean = true,
+        @Arg(AnimationToolDescriptions.SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         val trimmed = prompt.trim()
 
@@ -108,7 +110,7 @@ class AnimationTools(
 
         if (!send) return@suspendToolGuard keptNotSent("The GIF ($described)", label) + left
 
-        outbox.enqueue(BotOutput.Animation(bytes = bytes, filename = GIF_FILENAME))
+        outbox.enqueue(BotOutput.Animation(bytes = bytes, filename = GIF_FILENAME, spoiler = spoiler))
 
         "GIF queued ($described). Do not add a separate user-facing confirmation.$left"
     }

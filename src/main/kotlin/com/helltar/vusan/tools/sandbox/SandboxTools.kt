@@ -184,6 +184,8 @@ class SandboxTools(
         paths: List<String>,
         @Arg(SandboxToolDescriptions.SEND_AS)
         sendAs: String = "",
+        @Arg(SandboxToolDescriptions.SEND_SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         require(paths.isNotEmpty()) { "At least one path is required" }
         require(paths.size <= MAX_SEND_FILES) { "At most $MAX_SEND_FILES files per call" }
@@ -218,7 +220,7 @@ class SandboxTools(
             }
             remainingBytes -= bytes.size
             val name = sandboxFilename(path)
-            when (val output = sandboxOutput(name, bytes, kind)) {
+            when (val output = sandboxOutput(name, bytes, kind, spoiler)) {
                 is BotOutput.Photo -> photos += output
                 else -> others += output to name
             }
@@ -280,12 +282,12 @@ private val String.extension: String get() = substringAfterLast('.', "").lowerca
 
 // the name decides unless the model asked for a kind: a chat GIF is a soundless mp4, and only the model knows
 // its mp4 is meant to loop. a video the chat cannot play comes back as a document via the sender's fallback.
-private fun sandboxOutput(name: String, bytes: ByteArray, kind: String): BotOutput =
+private fun sandboxOutput(name: String, bytes: ByteArray, kind: String, spoiler: Boolean): BotOutput =
     when {
         kind == SEND_AS_DOCUMENT -> BotOutput.Document(bytes = bytes, filename = name)
-        kind == SEND_AS_ANIMATION || isAnimationFile(name, mimeType = null) -> BotOutput.Animation(bytes = bytes, filename = name)
-        attachedFileKindOf(name, mimeType = null) == AttachedFileKind.IMAGE -> BotOutput.Photo(bytes = bytes, filename = name)
-        attachedFileKindOf(name, mimeType = null) == AttachedFileKind.VIDEO -> BotOutput.Video(bytes = bytes, filename = name)
+        kind == SEND_AS_ANIMATION || isAnimationFile(name, mimeType = null) -> BotOutput.Animation(bytes = bytes, filename = name, spoiler = spoiler)
+        attachedFileKindOf(name, mimeType = null) == AttachedFileKind.IMAGE -> BotOutput.Photo(bytes = bytes, filename = name, spoiler = spoiler)
+        attachedFileKindOf(name, mimeType = null) == AttachedFileKind.VIDEO -> BotOutput.Video(bytes = bytes, filename = name, spoiler = spoiler)
         else -> BotOutput.Document(bytes = bytes, filename = name)
     }
 

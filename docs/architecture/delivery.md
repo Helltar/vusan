@@ -79,6 +79,9 @@ Before it: [running a turn](turn.md).
     - **Rich messages** — opt-in Bot API 10.1 (`BotOutput.RichMessage`, github-flavored markdown) via the
       `sendRichMessage` tool, resent as a `message.md` document if rejected. Opt-in because some third-party clients
       (e.g. Telegram X) render rich messages as unsupported.
+    - **Spoilers** — a tool that sends a photo, a video or an animation takes `spoiler`, carried on the `BotOutput`
+      and sent as `has_spoiler`, per photo in an album. No other kind has one, so the document fallback of a
+      rejected photo or video arrives uncovered. Text hides a part of itself with `<tg-spoiler>`.
     - **A send that fails after every fallback** — the kind's own fallbacks and the text-as-document one have all
       been tried by then, so `TelegramDelivery` treats the item as not sent: no transcript row is written for it, and a
       comment that was to ride on it as a caption goes out as a message of its own, since the words are the answer and

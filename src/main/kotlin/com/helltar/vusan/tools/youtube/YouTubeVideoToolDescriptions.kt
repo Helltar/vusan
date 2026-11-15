@@ -16,4 +16,7 @@ internal object YouTubeVideoToolDescriptions {
     const val SEND =
         "Whether the video goes to the chat; `true` by default. " +
                 "`false` keeps it for a later call instead, another tool or the sandbox, which takes it by the label the result names."
+
+    const val SPOILER =
+        "`true` sends the video under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
 }

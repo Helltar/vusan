@@ -33,6 +33,9 @@ internal object VideoGenToolDescriptions {
 
     const val SEND = "`false` keeps the video for a later call, such as `extendVideo`, without sending it."
 
+    const val SPOILER =
+        "`true` sends the video under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
+
     const val EDIT_VIDEO =
         "Change an existing video as described and send the result: restyle it, change the weather or the time of day, add or remove something. " +
                 "It keeps its length; the source has to be an MP4 clip of under nine seconds."
@@ -44,6 +47,9 @@ internal object VideoGenToolDescriptions {
                 "The video attached to the request when left out."
 
     const val EDIT_SEND = "`false` keeps the result for a later call without sending it."
+
+    const val EDIT_SPOILER =
+        "`true` sends the result under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
 
     const val EXTEND_VIDEO =
         "Continue a video from its last frame and send the original and the continuation as one video. " +
@@ -58,4 +64,7 @@ internal object VideoGenToolDescriptions {
     const val EXTEND_SECONDS = "Seconds to add, from `2` to `10`."
 
     const val EXTEND_SEND = "`false` keeps the result for a later call without sending it."
+
+    const val EXTEND_SPOILER =
+        "`true` sends the result under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
 }

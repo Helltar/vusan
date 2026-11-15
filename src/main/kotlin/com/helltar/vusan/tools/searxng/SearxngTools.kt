@@ -109,6 +109,8 @@ class SearxngTools(
         maxResults: Int = 5,
         @Arg(SearxngToolDescriptions.META_SEARCH_IMAGES_SEND)
         send: Boolean = true,
+        @Arg(SearxngToolDescriptions.META_SEARCH_IMAGES_SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         if (send) outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
 
@@ -125,6 +127,7 @@ class SearxngTools(
             limit = maxResults.coerceIn(1, MAX_IMAGE_RESULTS),
             outbox = outbox,
             send = send,
+            spoiler = spoiler,
         )
     }
 

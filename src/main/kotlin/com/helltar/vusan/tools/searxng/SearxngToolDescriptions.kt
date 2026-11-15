@@ -52,4 +52,7 @@ internal object SearxngToolDescriptions {
     const val META_SEARCH_IMAGES_SEND =
         "Whether the images go to the chat; `true` by default. " +
                 "`false` keeps them for a later call instead, another tool or the sandbox, which takes each by the label the result names."
+
+    const val META_SEARCH_IMAGES_SPOILER =
+        "`true` sends the images under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
 }

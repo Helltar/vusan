@@ -35,6 +35,8 @@ class ImageGenTools(
         selfPortrait: Boolean = false,
         @Arg(ImageGenToolDescriptions.SEND)
         send: Boolean = true,
+        @Arg(ImageGenToolDescriptions.SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         val trimmed = prompt.trim()
 
@@ -80,7 +82,7 @@ class ImageGenTools(
 
         if (!send) return@suspendToolGuard keptNotSent("The image (${framing.label}, ${bytes.size} bytes)", label)
 
-        outbox.enqueue(BotOutput.Photo(bytes = bytes, filename = name))
+        outbox.enqueue(BotOutput.Photo(bytes = bytes, filename = name, spoiler = spoiler))
 
         "Image queued (${framing.label}, ${bytes.size} bytes). Do not add a separate user-facing confirmation."
     }
@@ -97,6 +99,8 @@ class ImageGenTools(
         images: List<AttachedFile> = emptyList(),
         @Arg(ImageGenToolDescriptions.EDIT_SEND)
         send: Boolean = true,
+        @Arg(ImageGenToolDescriptions.EDIT_SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         val trimmed = prompt.trim()
         val candidates = images.ifEmpty { attachedFiles }
@@ -150,7 +154,7 @@ class ImageGenTools(
 
         if (!send) return@suspendToolGuard keptNotSent("The edited image (${framing.label}, ${bytes.size} bytes)", label) + left
 
-        outbox.enqueue(BotOutput.Photo(bytes = bytes, filename = name))
+        outbox.enqueue(BotOutput.Photo(bytes = bytes, filename = name, spoiler = spoiler))
 
         "Edited image queued (${sources.size} source image(s), ${framing.label}, ${bytes.size} bytes). " +
                 "Do not add a separate user-facing confirmation.$left"

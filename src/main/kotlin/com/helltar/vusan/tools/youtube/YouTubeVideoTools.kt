@@ -19,6 +19,8 @@ class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: Bot
         query: String,
         @Arg(YouTubeVideoToolDescriptions.SEND)
         send: Boolean = true,
+        @Arg(YouTubeVideoToolDescriptions.SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         if (send && !outbox.capabilities.videos)
             return@suspendToolGuard refusedByChat("videos")
@@ -50,6 +52,7 @@ class YouTubeVideoTools(private val client: YtDlpClient, private val outbox: Bot
                         height = video.height,
                         thumbnail = video.thumbnailBytes,
                         sourceUrl = video.sourceUrl,
+                        spoiler = spoiler,
                     ),
                 )
 

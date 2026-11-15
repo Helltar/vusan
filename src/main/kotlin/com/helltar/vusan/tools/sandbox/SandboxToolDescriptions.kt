@@ -114,4 +114,8 @@ internal object SandboxToolDescriptions {
                 "A screenshot, chart or any other picture meant to be looked at goes out as a photo, however much text it holds. " +
                 "`animation` sends a `.gif` or a soundless `.mp4` as a looping GIF. " +
                 "A GIF from the chat arrives as an `.mp4`, so return an edited one as an H.264 `.mp4` without audio (`-an`, `-pix_fmt yuv420p`) with `animation`, rather than converting it to `.gif`."
+
+    const val SEND_SPOILER =
+        "`true` sends the call's photos, videos and GIFs under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide. " +
+                "A document has none."
 }

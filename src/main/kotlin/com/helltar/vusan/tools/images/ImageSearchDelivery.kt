@@ -41,7 +41,8 @@ data class FoundImage(val url: String, val description: String? = null)
 
 /**
  * Downloads [candidates] in order, keeps up to [limit] the chat can show as photos on the turn's shelf,
- * queues them as one photo or a media group unless [send] is off, and returns the text reported to the model.
+ * queues them as one photo or a media group unless [send] is off, under a spoiler when [spoiler] is on, and
+ * returns the text reported to the model.
  * A chat refusing photos is answered before the first download when they are to be sent.
  */
 suspend fun ImageDownloadClient.deliverImageResults(
@@ -50,6 +51,7 @@ suspend fun ImageDownloadClient.deliverImageResults(
     limit: Int,
     outbox: BotOutbox,
     send: Boolean = true,
+    spoiler: Boolean = false,
 ): String {
     if (send) outbox.photosRefusedReply()?.let { return it }
 
@@ -76,7 +78,7 @@ suspend fun ImageDownloadClient.deliverImageResults(
 
         val filename = imageFilename(query, delivered.size, bytes)
 
-        delivered += BotOutput.Photo(bytes = bytes, filename = filename) to candidate.description
+        delivered += BotOutput.Photo(bytes = bytes, filename = filename, spoiler = spoiler) to candidate.description
     }
 
     if (delivered.isEmpty()) {

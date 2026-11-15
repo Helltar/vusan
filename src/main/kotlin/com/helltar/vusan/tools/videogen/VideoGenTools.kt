@@ -45,6 +45,8 @@ class VideoGenTools(
         sound: Boolean = true,
         @Arg(VideoGenToolDescriptions.SEND)
         send: Boolean = true,
+        @Arg(VideoGenToolDescriptions.SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         val text = prompt.requireToolText("prompt", PROMPT_MAX_CHARS)
 
@@ -85,7 +87,7 @@ class VideoGenTools(
                 )
             } ?: return@suspendToolGuard MODERATION_ADVICE
 
-        deliver(video, "The video (${video.durationSeconds ?: seconds} s)", send)
+        deliver(video, "The video (${video.durationSeconds ?: seconds} s)", send, spoiler)
     }
 
     @Tool(VideoGenToolDescriptions.EDIT_VIDEO)
@@ -96,6 +98,8 @@ class VideoGenTools(
         video: AttachedFile? = null,
         @Arg(VideoGenToolDescriptions.EDIT_SEND)
         send: Boolean = true,
+        @Arg(VideoGenToolDescriptions.EDIT_SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         val text = prompt.requireToolText("prompt", PROMPT_MAX_CHARS)
 
@@ -105,7 +109,7 @@ class VideoGenTools(
         val bytes = source.loadUpload()
         val edited = render("edit") { client.edit(text, bytes, source.name) } ?: return@suspendToolGuard MODERATION_ADVICE
 
-        deliver(edited, "The edited video", send)
+        deliver(edited, "The edited video", send, spoiler)
     }
 
     @Tool(VideoGenToolDescriptions.EXTEND_VIDEO)
@@ -118,6 +122,8 @@ class VideoGenTools(
         seconds: Int = DEFAULT_SECONDS,
         @Arg(VideoGenToolDescriptions.EXTEND_SEND)
         send: Boolean = true,
+        @Arg(VideoGenToolDescriptions.EXTEND_SPOILER)
+        spoiler: Boolean = false,
     ): String = suspendToolGuard {
         val text = prompt.requireToolText("prompt", PROMPT_MAX_CHARS)
 
@@ -134,7 +140,7 @@ class VideoGenTools(
             render("extend") { client.extend(text, bytes, source.name, seconds, source.durationSeconds) }
                 ?: return@suspendToolGuard MODERATION_ADVICE
 
-        deliver(extended, "The extended video", send)
+        deliver(extended, "The extended video", send, spoiler)
     }
 
     // the video, or null when moderation withheld it, which the model is told rather than failed with
@@ -151,12 +157,12 @@ class VideoGenTools(
                 throw e
             }
 
-    private suspend fun deliver(video: RenderedVideo, what: String, send: Boolean): String {
+    private suspend fun deliver(video: RenderedVideo, what: String, send: Boolean, spoiler: Boolean): String {
         val label = keepOnShelf(VIDEO_FILENAME, video.bytes)
 
         if (!send) return keptNotSent("$what (${video.bytes.size} bytes)", label)
 
-        outbox.enqueue(BotOutput.Video(bytes = video.bytes, filename = VIDEO_FILENAME, durationSeconds = video.durationSeconds))
+        outbox.enqueue(BotOutput.Video(bytes = video.bytes, filename = VIDEO_FILENAME, durationSeconds = video.durationSeconds, spoiler = spoiler))
 
         return "$what is queued (${video.bytes.size} bytes)${label?.let { " and kept as `$it`" }.orEmpty()}. " +
                 "Do not add a separate user-facing confirmation."
