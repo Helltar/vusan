@@ -107,7 +107,9 @@ private const val MAX_LINE_CHARS = 500
 private val VERDICT = Regex(""""addressed"\s*:\s*(true|false)""")
 
 internal const val ADDRESSED_WHEN =
-    "The author speaks to the bot in the second person: asks it, tells it to do something, greets, " +
+    "The author speaks to the bot in the second person: asks it, tells it to do something (its name and a " +
+            "bare command or slang word are enough, also in a reply to someone else's post, which is then what " +
+            "the bot is asked about), greets, " +
             "thanks or argues with it — by its name, by a generic word such as «бот», or with no name at all " +
             "when the message continues the author's exchange with the bot or picks up the bot's latest answer."
 
