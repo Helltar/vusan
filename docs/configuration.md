@@ -402,7 +402,7 @@ ADDRESSING_API_KEY=...
 ADDRESSING_MODEL=jev-1.14.0
 ```
 
-- **Model** — name a version rather than `jev-latest`. Vusan answers from a probability of 0.7 up,
+- **Model** — name a version rather than `jev-latest`. Vusan answers from a probability of 0.6 up,
   a line drawn on `jev-1.14.0`, and an alias moves to the next version on its own.
 - **At startup** — Vusan asks Jev one question, and a key or model TypeSafe refuses stops it there.
 - **In the log** — each verdict is preceded by an `ambient probability:` line saying how near the

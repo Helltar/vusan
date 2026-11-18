@@ -44,8 +44,8 @@ class JevAddressingClassifierTest {
     @Test
     fun `a probability at the cut-off or above is a yes, anything under it a no`() {
         assertEquals(true, verdict("""{"addressed":{"type":"noul","noul":0.93}}"""))
-        assertEquals(true, verdict("""{"addressed":{"type":"noul","noul":0.7}}"""))
-        assertEquals(false, verdict("""{"addressed":{"type":"noul","noul":0.69}}"""))
+        assertEquals(true, verdict("""{"addressed":{"type":"noul","noul":0.6}}"""))
+        assertEquals(false, verdict("""{"addressed":{"type":"noul","noul":0.59}}"""))
         assertEquals(false, verdict("""{"addressed":{"type":"noul","noul":0.04}}"""))
     }
 

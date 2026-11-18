@@ -31,9 +31,9 @@ class JevAddressingClassifier(
 
         const val QUESTION = "addressed"
 
-        // measured on jev-1.14.0: nearly every message for someone else stayed under 0.35 and nearly every one
-        // for the bot above 0.75. the cut-off sits high in that gap because answering into someone else's
-        // conversation is the expensive mistake
-        const val ADDRESSED_FROM = 0.7
+        // measured on jev-1.14.0: nearly every message for someone else stayed under 0.5, while the name plus a
+        // bare command ("vusan tldr") sat at 0.6-0.7. 0.6 takes those in at two false positives on 412 probes;
+        // lower lets more in, and answering into someone else's conversation is the expensive mistake
+        const val ADDRESSED_FROM = 0.6
     }
 }
