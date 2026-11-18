@@ -1,5 +1,6 @@
 package com.helltar.vusan.llm
 
+import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.time.Clock
@@ -79,9 +80,10 @@ class FallbackLlmClient(
 
                 primaryOutage = outage
 
+                // the message carries the provider's body, often pretty-printed json: its first line alone is `{`
                 log.warn {
                     "$primaryLabel is out for ${JavaDuration.between(now, outage.until).toMinutes()}m: " +
-                            "${e.message?.lineSequence()?.firstOrNull()}; answering from $fallbackLabel until then"
+                            "${e.message?.collapseWhitespaceAndCap(LOG_REASON_MAX_CHARS)}; answering from $fallbackLabel until then"
                 }
 
                 return onFallback(request)
@@ -125,6 +127,8 @@ class FallbackLlmClient(
     }
 
     private companion object {
+        const val LOG_REASON_MAX_CHARS = 600
+
         val log = KotlinLogging.logger {}
     }
 }
