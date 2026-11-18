@@ -140,6 +140,18 @@ class AmbientAddressingTest {
     }
 
     @Test
+    fun `media without a caption is shown by its kind`() = runBlocking {
+        val classifier = FakeClassifier(answer = true)
+        groupLog.record(person("7", "Alice", "a photo", minutesAgo(3)).copy(kind = "photo", text = null))
+        groupLog.record(person("8", "Alice", "a clip", minutesAgo(2)).copy(kind = "video", text = null, descriptor = "0:27"))
+        groupLog.record(bot("unused", minutesAgo(1)).copy(text = null, descriptor = "sent a sticker"))
+
+        addressing(classifier).isAddressed(candidate("robin tldr"))
+
+        assertEquals(listOf("[photo]", "[video 0:27]", "[sent a sticker]"), classifier.inputs.single().recent.map { it.text })
+    }
+
+    @Test
     fun `lines older than ten minutes are not shown`() = runBlocking {
         val classifier = FakeClassifier(answer = true)
         groupLog.record(person("7", "Alice", "an old topic", minutesAgo(11)))

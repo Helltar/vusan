@@ -119,7 +119,7 @@ private fun GroupLogEntry.toLine(zone: ZoneId, formatter: DateTimeFormatter, max
 private fun GroupLogEntry.authorLabel(): String =
     if (kind == GroupLogEntry.BOT_KIND) BOT_LABEL else senderUsername ?: senderName ?: ANONYMOUS_LABEL
 
-private fun GroupLogEntry.mediaMarker(): String? =
+internal fun GroupLogEntry.mediaMarker(): String? =
 
     when {
         kind in TEXTUAL_KINDS -> null

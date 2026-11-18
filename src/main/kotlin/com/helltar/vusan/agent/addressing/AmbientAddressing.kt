@@ -2,6 +2,7 @@ package com.helltar.vusan.agent.addressing
 
 import com.helltar.vusan.agent.grouplog.GroupLogEntry
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
+import com.helltar.vusan.agent.grouplog.mediaMarker
 import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.config.llm.AddressingConfig
@@ -155,7 +156,8 @@ class AmbientAddressing(
             if (kind == GroupLogEntry.BOT_KIND) botNames.first()
             else senderName ?: senderUsername ?: UNKNOWN_AUTHOR
 
-        val content = text ?: descriptor?.let { "[$it]" } ?: return null
+        // a caption-less photo is often the very post the message asks the bot about
+        val content = text ?: mediaMarker() ?: return null
 
         return ChatLine(from, content)
     }
