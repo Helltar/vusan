@@ -58,7 +58,7 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
  * the prompt wants the tools there are; [sandbox], [images] and [videos] change what the prompt itself says.
  */
 internal data class PromptExportOptions(
-    val model: String = "gpt-6.1-sol",
+    val model: String = "gpt-6.2-sol",
     val personality: String = DEFAULT_PERSONALITY,
     val botUsernames: List<String> = emptyList(),
     val botDisplayName: String? = null,

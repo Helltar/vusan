@@ -22,7 +22,7 @@ Five values, and Vusan runs:
 OWNER_ID=123456789
 TELEGRAM_BOT_TOKEN=1234567890:qwerty
 LLM_PROVIDER=openai
-LLM_MODEL=gpt-6.1-sol
+LLM_MODEL=gpt-6.2-sol
 LLM_API_KEY=sk-proj-qwerty
 ```
 
@@ -58,7 +58,7 @@ LLM_API_KEY=sk-proj-qwerty
 
 | Provider            | Example model              | What it is                                                                               |
 |---------------------|----------------------------|------------------------------------------------------------------------------------------|
-| `openai`            | `gpt-6.1-sol`              | OpenAI's API, a current model that reasons and sees images.                              |
+| `openai`            | `gpt-6.2-sol`              | OpenAI's API, a current model that reasons and sees images.                              |
 | `anthropic`         | `claude-opus-5-5`          | Anthropic's API, Claude 4.6 or newer.                                                    |
 | `openrouter`        | `google/gemini-3.8-flash`  | Many vendors' models behind one [OpenRouter](providers.md#openrouter) key.               |
 | `google`            | `gemini-3.8-flash`         | [Google's](providers.md#google) Gemini API on an AI Studio key.                          |

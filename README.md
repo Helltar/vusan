@@ -36,7 +36,7 @@ Fill in these five values in `.env`:
 OWNER_ID=123456789
 TELEGRAM_BOT_TOKEN=1234567890:qwerty
 LLM_PROVIDER=openai
-LLM_MODEL=gpt-6.1-sol
+LLM_MODEL=gpt-6.2-sol
 LLM_API_KEY=sk-proj-qwerty
 ```
 
