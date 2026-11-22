@@ -18,7 +18,7 @@ private val log = KotlinLogging.logger {}
 // newer, so an understated value makes the newest model look unavailable. startup claims the newest it finds
 // (this floor, the installed CLI, the latest github release), so an upgraded host and a binary-less container
 // both see new models without a vusan release; this constant only matters when github is out of reach.
-private const val CODEX_CLIENT_VERSION_FLOOR = "0.162.0"
+private const val CODEX_CLIENT_VERSION_FLOOR = "0.171.0"
 // where the CLI's own update check looks: the latest non-prerelease, tagged `rust-v<version>`
 private const val CODEX_LATEST_RELEASE_URL = "https://api.github.com/repos/openai/codex/releases/latest"
 private val CODEX_LATEST_RELEASE_TIMEOUT = 5.seconds

@@ -426,7 +426,7 @@ data class AppConfig(
             val raw = readEnv("CODEX_CLIENT_VERSION")?.trim() ?: return null
 
             return raw.takeIf { CODEX_VERSION.matches(it) }
-                ?: error("Unsupported CODEX_CLIENT_VERSION=[$raw]. Expected a Codex CLI version such as 0.162.0")
+                ?: error("Unsupported CODEX_CLIENT_VERSION=[$raw]. Expected a Codex CLI version such as 0.171.0")
         }
 
         private inline fun <reified T : Enum<T>> enumOrNull(raw: String): T? =

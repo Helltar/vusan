@@ -143,7 +143,7 @@ can be missing. Vusan claims the newest of the version it knows, the `codex` on 
 latest release on GitHub; a host that cannot reach `api.github.com` can pin one:
 
 ```dotenv
-CODEX_CLIENT_VERSION=0.162.0
+CODEX_CLIENT_VERSION=0.171.0
 ```
 
 ### Speed, pictures and search
