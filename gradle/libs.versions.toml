@@ -8,6 +8,7 @@ lombok = "1.18.48"
 dotenv = "6.5.1"
 sqlite-jdbc = "3.54.1.0"
 jsoup = "1.24.1"
+twelvemonkeys = "3.15.3"
 kotlin-logging = "8.0.7"
 logback = "1.6.7"
 cron-utils = "9.2.1"
@@ -32,6 +33,7 @@ ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negoti
 ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
+twelvemonkeys-imageio-webp = { module = "com.twelvemonkeys.imageio:imageio-webp", version.ref = "twelvemonkeys" }
 cron-utils = { module = "com.cronutils:cron-utils", version.ref = "cron-utils" }
 kotlin-logging-jvm = { module = "io.github.oshai:kotlin-logging-jvm", version.ref = "kotlin-logging" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }

@@ -37,6 +37,8 @@ dependencies {
 
     implementation(libs.dotenv.kotlin)
     implementation(libs.jsoup)
+    // imageio reads no webp without a plugin, and web pictures often are webp
+    implementation(libs.twelvemonkeys.imageio.webp)
     implementation(libs.cron.utils)
 
     implementation(libs.kotlin.logging.jvm)

@@ -21,7 +21,10 @@ WORKDIR /app
 # runtime yt-dlp enables by default, so dropping the package silently degrades every youtube tool.
 # its version is whatever alpine ships and is deliberately not held to the sandbox service's pin:
 # yt-dlp needs a JS runtime, not a particular one, and alpine offers no version to pin to anyway.
-RUN apk add --no-cache deno ffmpeg openjdk21-jre-headless python3 && \
+# openjdk21-jre rather than its -headless half: alpine ships the jpeg codec (libjavajpeg) and the color
+# management (liblcms) only there, and without them imageio reads and writes no jpeg at all, failing quietly
+# wherever a picture is measured, compared or re-encoded. awt still runs headless, see the entrypoint.
+RUN apk add --no-cache deno ffmpeg openjdk21-jre python3 && \
     apk add --no-cache --virtual .pip py3-pip && \
     pip install --pre --no-cache-dir --break-system-packages "yt-dlp[default]" && \
     apk del .pip
@@ -40,4 +43,4 @@ USER vusan:vusan
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
     CMD test $(( $(date +%s) - $(stat -c %Y /tmp/health 2>/dev/null || echo 0) )) -lt 90
 
-ENTRYPOINT ["java", "-jar", "vusan.jar"]
+ENTRYPOINT ["java", "-Djava.awt.headless=true", "-jar", "vusan.jar"]
