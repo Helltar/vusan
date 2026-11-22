@@ -10,7 +10,6 @@ import com.helltar.vusan.tools.memory.MemoryTools
 import com.helltar.vusan.tools.message.MessageTools
 import com.helltar.vusan.tools.page.PageTools
 import com.helltar.vusan.tools.sandbox.SandboxTools
-import com.helltar.vusan.tools.searxng.SearxngTools
 import com.helltar.vusan.tools.tasks.FollowUpTools
 import com.helltar.vusan.tools.tasks.TaskTools
 import com.helltar.vusan.tools.tavily.TavilyTools
@@ -57,7 +56,6 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(MessageTools::sendMessageNow.name, ToolActivity.WRITING)
     put(MessageTools::sendRichMessage.name, ToolActivity.WRITING)
     put(TavilyTools::webSearch.name, ToolActivity.SEARCHING_WEB)
-    put(SearxngTools::metaSearch.name, ToolActivity.SEARCHING_WEB)
     put(CodexSearchTools::answerFromWeb.name, ToolActivity.SEARCHING_WEB)
     put(PageTools::readPage.name, ToolActivity.READING_PAGE)
     put(TavilyTools::extractPageContent.name, ToolActivity.READING_PAGE)
@@ -65,7 +63,6 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(YouTubeTranscriptTools::readYouTubeTranscript.name, ToolActivity.READING_TRANSCRIPT)
     put(GroupLogTools::readGroupLog.name, ToolActivity.READING_CHAT_LOG)
     put(TavilyTools::searchImages.name, ToolActivity.SEARCHING_IMAGES)
-    put(SearxngTools::metaSearchImages.name, ToolActivity.SEARCHING_IMAGES)
     put(GiphyTools::searchGifs.name, ToolActivity.SEARCHING_GIF)
     put(KlipyTools::searchGifs.name, ToolActivity.SEARCHING_GIF)
     put(ImageGenTools::generateImage.name, ToolActivity.DRAWING)

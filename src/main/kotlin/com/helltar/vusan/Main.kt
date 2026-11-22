@@ -509,17 +509,10 @@ private fun logStartup(
 
     log.info { config.openAiStt?.let { "Voice input: model=[${it.model}]" } ?: "Voice input: off (OPENAI_STT_API_KEY not set)" }
 
-    val searches =
-        buildList {
-            if (config.tavilyApiKey != null) add("tavily")
-            if (config.searxngUrl != null) add("searxng")
-            // the plan answers searches when it is the chat provider or its fallback, as the catalog rules
-            if (listOfNotNull(config.llmProvider, config.llmFallback).filterIsInstance<LlmProviderConfig.Codex>().any { it.webSearch }) add("codex")
-        }
-
     log.info {
-        if (searches.isEmpty()) "Web search: off (TAVILY_API_KEY and SEARXNG_URL not set)"
-        else "Web search: providers=[${searches.joinToString(", ")}]"
+        config.webSearch?.let { search ->
+            "Web search: provider=[${search.name}]" + ((search as? WebSearchConfig.Codex)?.let { " model=[${it.model}]" }.orEmpty())
+        } ?: "Web search: off (WEB_SEARCH_PROVIDER not set)"
     }
 
     log.info {

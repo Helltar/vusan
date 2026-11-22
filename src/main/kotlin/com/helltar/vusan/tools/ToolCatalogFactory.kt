@@ -12,7 +12,7 @@ import com.helltar.vusan.agent.presence.DiaryRepository
 import com.helltar.vusan.agent.presence.LeaveAloneRepository
 import com.helltar.vusan.config.AppConfig
 import com.helltar.vusan.config.ImageProviderConfig
-import com.helltar.vusan.config.llm.LlmProviderConfig
+import com.helltar.vusan.config.WebSearchConfig
 import com.helltar.vusan.config.llm.VisionRuntime
 import com.helltar.vusan.llm.codex.CodexAuthStore
 import com.helltar.vusan.outbox.BotOutbox
@@ -28,6 +28,8 @@ import com.helltar.vusan.tools.codexsearch.CodexSearchClient
 import com.helltar.vusan.tools.codexsearch.CodexSearchTools
 import com.helltar.vusan.tools.context.ContextTools
 import com.helltar.vusan.tools.diary.DiaryTools
+import com.helltar.vusan.tools.exa.ExaClient
+import com.helltar.vusan.tools.exa.ExaTools
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.files.FileTools
 import com.helltar.vusan.tools.giphy.GiphyClient
@@ -142,23 +144,26 @@ class ToolCatalogFactory(
             ),
         )
 
+    // one search provider or none, so at most one of these four is built and only its tools are offered
     private val tavilyClient =
-        config.tavilyApiKey?.let {
-            TavilyClient(http, it)
+        (config.webSearch as? WebSearchConfig.Tavily)?.let {
+            TavilyClient(http, it.apiKey)
         }
 
     private val searxngClient =
-        config.searxngUrl?.let {
-            SearxngClient(http, it)
+        (config.webSearch as? WebSearchConfig.Searxng)?.let {
+            SearxngClient(http, it.url)
         }
 
-    // the subscription is the chat provider or its fallback; the search runs on the model configured there,
-    // which the plan is known to offer.
+    private val exaClient =
+        (config.webSearch as? WebSearchConfig.Exa)?.let {
+            ExaClient(http, it.apiKey)
+        }
+
     private val codexSearchClient =
-        listOfNotNull(config.llmProvider, config.llmFallback)
-            .firstNotNullOfOrNull { it as? LlmProviderConfig.Codex }
-            ?.takeIf { it.webSearch }
-            ?.let { codex -> codexAuth?.let { CodexSearchClient(http, it, codex.model) } }
+        (config.webSearch as? WebSearchConfig.Codex)?.let {
+            CodexSearchClient(http, requireNotNull(codexAuth) { "a codex web search needs the plan's sign-in" }, it.model)
+        }
 
     private val giphyClient =
         config.giphyApiKey?.let {
@@ -269,6 +274,7 @@ class ToolCatalogFactory(
 
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
+            exaClient?.let { tools(ExaTools(it)) }
             codexSearchClient?.let { tools(CodexSearchTools(it)) }
             tools(PageTools(pageReader))
             sandboxClient?.let { client ->

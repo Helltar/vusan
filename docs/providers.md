@@ -152,8 +152,9 @@ CODEX_CLIENT_VERSION=0.162.0
   plan quicker. It applies to the chat model and its fallback only.
 - **Pictures** — `IMAGE_PROVIDER=codex` draws [images](configuration.md#image-generation) on the same account,
   whether or not the chat runs on `codex`.
-- **Web search** — `answerFromWeb` searches through the plan with no search key, and each search
-  spends a good deal of it; `CODEX_WEB_SEARCH_ENABLED=false` turns it off.
+- **Web search** — `WEB_SEARCH_PROVIDER=codex` makes the plan the [search](configuration.md#web-search),
+  with no search key, when the chat or its fallback runs on `codex`. Each search spends a good deal
+  of the plan.
 
 ### Limits
 

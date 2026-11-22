@@ -153,18 +153,17 @@ notices on the first status it sends and keeps plain emoji until a restart.
 Each optional tool is switched on by one variable. Without it, the tool is left out and the startup
 summary says so in one line.
 
-| Variable             | Enables                                    | Notes                                                    |
-|----------------------|--------------------------------------------|----------------------------------------------------------|
-| `TAVILY_API_KEY`     | Web search, image search, page rendering   | See [Web search](#web-search)                            |
-| `SEARXNG_URL`        | Fallback web and image search              | See [Web search](#web-search)                            |
-| `GIPHY_API_KEY`      | GIF lookup                                 | See [GIFs](#gifs-memes-and-clips)                        |
-| `KLIPY_API_KEY`      | GIF, meme and clip lookup                  | Wins over Giphy; see [GIFs](#gifs-memes-and-clips)       |
-| `ELEVENLABS_API_KEY` | Voice and round video messages             | See [Voice output](#voice-output)                        |
-| `OPENAI_STT_API_KEY` | Voice input and transcribing any recording | Your OpenAI key works; see [Voice input](#voice-input)   |
-| `IMAGE_PROVIDER`     | Image generation                           | See [Image generation](#image-generation)                |
-| `XAI_API_KEY`        | Video generation                           | See [Video generation](#video-generation)                |
-| `VISION_MODEL`       | Vision on a chat model that cannot see     | See [Vision](#vision)                                    |
-| `REGOLITH_URL`       | Shell sandbox                              | See [Sandbox](#sandbox)                                  |
+| Variable              | Enables                                    | Notes                                                  |
+|-----------------------|--------------------------------------------|--------------------------------------------------------|
+| `WEB_SEARCH_PROVIDER` | Web search; image search on some providers | See [Web search](#web-search)                          |
+| `GIPHY_API_KEY`       | GIF lookup                                 | See [GIFs](#gifs-memes-and-clips)                      |
+| `KLIPY_API_KEY`       | GIF, meme and clip lookup                  | Wins over Giphy; see [GIFs](#gifs-memes-and-clips)     |
+| `ELEVENLABS_API_KEY`  | Voice and round video messages             | See [Voice output](#voice-output)                      |
+| `OPENAI_STT_API_KEY`  | Voice input and transcribing any recording | Your OpenAI key works; see [Voice input](#voice-input) |
+| `IMAGE_PROVIDER`      | Image generation                           | See [Image generation](#image-generation)              |
+| `XAI_API_KEY`         | Video generation                           | See [Video generation](#video-generation)              |
+| `VISION_MODEL`        | Vision on a chat model that cannot see     | See [Vision](#vision)                                  |
+| `REGOLITH_URL`        | Shell sandbox                              | See [Sandbox](#sandbox)                                |
 
 ### GIFs, memes and clips
 
@@ -176,18 +175,26 @@ approval.
 
 ### Web search
 
-Reading a link works on any setup. Search comes from up to three providers, each usable alone:
+Reading a link works on any setup. Search comes from the one provider `WEB_SEARCH_PROVIDER` names,
+with the setting that provider needs; the settings of the others are ignored. Only that provider's
+tools are offered, and when it fails no other one stands in.
 
-| Provider             | Tools                                             | Role                                                |
-|----------------------|---------------------------------------------------|-----------------------------------------------------|
-| `TAVILY_API_KEY`     | `webSearch`, `searchImages`, `extractPageContent` | Default web and image search, and page rendering.   |
-| `SEARXNG_URL`        | `metaSearch`, `metaSearchImages`                  | Fallback for both, plus search by category.         |
-| `LLM_PROVIDER=codex` | `answerFromWeb`                                   | A researched answer with its sources, on the plan.  |
+| `WEB_SEARCH_PROVIDER` | Needs                                                    | Tools                                             |
+|-----------------------|----------------------------------------------------------|---------------------------------------------------|
+| `tavily`              | `TAVILY_API_KEY`                                         | `webSearch`, `searchImages`, `extractPageContent` |
+| `searxng`             | `SEARXNG_URL`                                            | `webSearch`, `searchImages`                       |
+| `exa`                 | `EXA_API_KEY`                                            | `webSearch`, `extractPageContent`                 |
+| `codex`               | `LLM_PROVIDER` or `LLM_FALLBACK_PROVIDER` set to `codex` | `answerFromWeb`                                   |
 
-- **SearXNG** — self-hosted and free per call, so search keeps working when Tavily fails or runs out
-  of quota.
-- **`answerFromWeb`** — on a [ChatGPT subscription](providers.md#chatgpt-subscription), as the provider or the
-  fallback. It is slower and spends the plan, so the agent tries the others first.
+- **Tavily** — page extracts in the results, picture search, and pages rendered before they are read.
+- **SearXNG** — self-hosted and free per call; short snippets, so pages are read with `readPage`,
+  and search can be scoped by category and language.
+- **Exa** — the passages of each page that bear on the query, and page contents. No picture search.
+- **`codex`** — a researched answer with its sources on the
+  [ChatGPT subscription](providers.md#chatgpt-subscription) the chat runs on, rather than a list of
+  results. It is slower, and each search spends the plan.
+
+Without `WEB_SEARCH_PROVIDER` nothing searches, whatever keys are set.
 
 Point `SEARXNG_URL` at the instance root, without `/search`, and let the instance serve JSON — it
 ships with `formats: [html]` only and answers anything else with `403`:

@@ -24,7 +24,7 @@ class PromptExportTest {
         assertTrue("`test-model`" in operational)
 
         val names = export.tools().map { it.text("name") }
-        assertTrue(listOf("sendMessage", "runCommand", "generateImage", "generateVideo", "answerFromWeb", "loadTools").all { it in names })
+        assertTrue(listOf("sendMessage", "runCommand", "generateImage", "generateVideo", "webSearch", "loadTools").all { it in names })
         assertEquals(names.size, names.toSet().size)
     }
 
@@ -44,6 +44,20 @@ class PromptExportTest {
         assertFalse("runCommand" in names)
         assertFalse("generateVideo" in names)
         assertFalse("sandbox:<path>" in export.text("operational"))
+    }
+
+    @Test
+    fun `each search provider is offered alone, with the tools it has`() {
+        fun searchTools(provider: String) =
+            exportPrompt(PromptExportOptions(search = provider)).tools().map { it.text("name") }
+                .filter { it in setOf("webSearch", "searchImages", "extractPageContent", "answerFromWeb") }
+                .toSet()
+
+        assertEquals(setOf("webSearch", "searchImages", "extractPageContent"), searchTools("tavily"))
+        assertEquals(setOf("webSearch", "searchImages"), searchTools("searxng"))
+        assertEquals(setOf("webSearch", "extractPageContent"), searchTools("exa"))
+        assertEquals(setOf("answerFromWeb"), searchTools("codex"))
+        assertEquals(emptySet(), searchTools("none"))
     }
 
     private fun JsonObject.text(key: String): String = getValue(key).jsonPrimitive.content

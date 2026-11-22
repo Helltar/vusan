@@ -25,10 +25,8 @@ internal fun testConfig(dbPath: String, accessPolicy: AccessPolicy = AccessPolic
         openAiStt = null,
         regolithToken = null,
         regolithUrl = null,
-        searxngUrl = null,
         selfImageFile = null,
         personality = null,
-        tavilyApiKey = null,
         telegramBotToken = "test",
         ytDlpCookiesFile = null,
     )

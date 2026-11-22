@@ -19,17 +19,17 @@ class SearxngTools(
     private val outbox: BotOutbox,
 ) : ToolSet {
 
-    @Tool(SearxngToolDescriptions.META_SEARCH, readOnly = true, copiedToSandbox = true)
-    suspend fun metaSearch(
-        @Arg(SearxngToolDescriptions.META_SEARCH_QUERY)
+    @Tool(SearxngToolDescriptions.WEB_SEARCH, readOnly = true, copiedToSandbox = true)
+    suspend fun webSearch(
+        @Arg(SearxngToolDescriptions.WEB_SEARCH_QUERY)
         query: String,
-        @Arg(SearxngToolDescriptions.META_SEARCH_MAX_RESULTS)
+        @Arg(SearxngToolDescriptions.WEB_SEARCH_MAX_RESULTS)
         maxResults: Int = 6,
-        @Arg(SearxngToolDescriptions.META_SEARCH_CATEGORIES)
+        @Arg(SearxngToolDescriptions.WEB_SEARCH_CATEGORIES)
         categories: String = "general",
-        @Arg(SearxngToolDescriptions.META_SEARCH_TIME_RANGE)
+        @Arg(SearxngToolDescriptions.WEB_SEARCH_TIME_RANGE)
         timeRange: String = "",
-        @Arg(SearxngToolDescriptions.META_SEARCH_LANGUAGE)
+        @Arg(SearxngToolDescriptions.WEB_SEARCH_LANGUAGE)
         language: String = "",
     ): String = suspendToolGuard {
         val response =
@@ -49,12 +49,12 @@ class SearxngTools(
             // result says nothing about the query; "nothing found" would have the model tell the user the
             // topic has no coverage.
             if (down.isNotEmpty()) {
-                log.warn { "metaSearch: every engine failed query=[$query] unresponsiveEngines=[${down.joinToString()}]" }
+                log.warn { "webSearch: every engine failed query=[$query] unresponsiveEngines=[${down.joinToString()}]" }
 
                 error(
                     "The search engines behind this lookup are all rate-limited or unreachable, " +
                             """so nothing came back for "$query" — this says nothing about the topic itself. """ +
-                            "Retry with `webSearch` when it is offered, otherwise tell the user search is temporarily unavailable.",
+                            "Tell the user search is temporarily unavailable.",
                 )
             }
 
@@ -101,15 +101,15 @@ class SearxngTools(
         }.trim().limitTo(MAX_SEARCH_OUTPUT_CHARS)
     }
 
-    @Tool(SearxngToolDescriptions.META_SEARCH_IMAGES)
-    suspend fun metaSearchImages(
-        @Arg(SearxngToolDescriptions.META_SEARCH_IMAGES_QUERY)
+    @Tool(SearxngToolDescriptions.SEARCH_IMAGES)
+    suspend fun searchImages(
+        @Arg(SearxngToolDescriptions.SEARCH_IMAGES_QUERY)
         query: String,
-        @Arg(SearxngToolDescriptions.META_SEARCH_IMAGES_MAX_RESULTS)
+        @Arg(SearxngToolDescriptions.SEARCH_IMAGES_MAX_RESULTS)
         maxResults: Int = 5,
-        @Arg(SearxngToolDescriptions.META_SEARCH_IMAGES_SEND)
+        @Arg(SearxngToolDescriptions.SEARCH_IMAGES_SEND)
         send: Boolean = true,
-        @Arg(SearxngToolDescriptions.META_SEARCH_IMAGES_SPOILER)
+        @Arg(SearxngToolDescriptions.SEARCH_IMAGES_SPOILER)
         spoiler: Boolean = false,
     ): String = suspendToolGuard {
         if (send) outbox.photosRefusedReply()?.let { return@suspendToolGuard it }

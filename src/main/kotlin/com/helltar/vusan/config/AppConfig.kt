@@ -47,13 +47,13 @@ data class AppConfig(
     val personalityFile: String? = null,
     val regolithToken: String?,
     val regolithUrl: String?,
-    val searxngUrl: String?,
     val selfImageFile: String?,
     val stickersEnabled: Boolean = true,
-    val tavilyApiKey: String?,
     val telegramBotToken: String,
     // a local bot api server to talk to instead of telegram's own, e.g. `http://telegram-bot-api:8081`
     val telegramBotApiUrl: String? = null,
+    // one provider or none; nothing searches when it is null
+    val webSearch: WebSearchConfig? = null,
     val ytDlpCookiesFile: String?,
 ) {
 
@@ -126,12 +126,11 @@ data class AppConfig(
                 personalityFile = personalityFile,
                 regolithToken = regolithUrl?.let { readServiceToken("REGOLITH", readEnv("REGOLITH_TOKEN")) },
                 regolithUrl = regolithUrl,
-                searxngUrl = readEnv("SEARXNG_URL"),
                 selfImageFile = readEnv("SELF_IMAGE_FILE"),
                 stickersEnabled = readBooleanEnv("STICKERS_ENABLED") ?: true,
-                tavilyApiKey = readEnv("TAVILY_API_KEY"),
                 telegramBotToken = requireEnv("TELEGRAM_BOT_TOKEN"),
                 telegramBotApiUrl = readEnv("TELEGRAM_BOT_API_URL"),
+                webSearch = resolveWebSearch(::readEnv, llmProvider, llmFallback),
                 ytDlpCookiesFile = readEnv("YT_DLP_COOKIES_FILE"),
 
                 chatHistory =
@@ -271,7 +270,6 @@ data class AppConfig(
                     // the tier is the chat's: a role spends the same allowance, and its model may not be
                     // served at it
                     serviceTier = resolveCodexServiceTier().takeIf { prefix == LLM_PREFIX || prefix == LLM_FALLBACK_PREFIX },
-                    webSearch = readBooleanEnv("CODEX_WEB_SEARCH_ENABLED") ?: true,
                     clientVersion = resolveCodexClientVersion(),
                     authFile = defaultCodexAuthFile(readEnv("CODEX_HOME")),
                     requestTimeout = requestTimeout,

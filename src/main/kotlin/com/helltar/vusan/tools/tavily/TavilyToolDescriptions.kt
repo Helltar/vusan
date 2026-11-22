@@ -4,7 +4,7 @@ internal object TavilyToolDescriptions {
 
     const val WEB_SEARCH =
         "Search the web for up-to-date information on any topic, event, person, or question. " +
-                "This is the default web lookup — use it whenever the user asks about recent news, facts, or anything that needs a live check. " +
+                "Use it whenever the user asks about recent news, facts, or anything that needs a live check. " +
                 "Each result comes back as a cleaned-up extract of the page rather than a short snippet; `extractPageContent` reads one in full."
 
     const val WEB_SEARCH_QUERY =
@@ -31,7 +31,7 @@ internal object TavilyToolDescriptions {
                 "Use this for static images, including anime art or character pictures. " +
                 "Multiple results are sent as one album. " +
                 "Each call sends its own album and usually yields about 5 images whatever `maxResults` asks, so do not promise a count before the result comes back, and do not call it again just to top a short album up: the user would get two albums. " +
-                "When the user wants more than one call gave, say how many were sent and offer `metaSearchImages`, which draws on other engines and sends a second album. " +
+                "When the user wants more than one call gave, say how many were sent and offer a second album. " +
                 "Do not use for animated GIFs (use `searchGifs` instead). " +
                 "The tool returns a description of what is visible in each photo. " +
                 "If the user asked you to describe / say what's on the photo (`describe it`, `what's on it`, `what does it show`), use these descriptions as the source — rewrite them in the user's language as your plain reply (becomes the caption for a single image) or via `sendMessage` (after a media group)."

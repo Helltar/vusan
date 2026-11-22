@@ -172,8 +172,6 @@ sealed interface LlmProviderConfig {
         // the catalog's default verbosity, sent as the CLI sends it; the backend's own default is a step
         // wordier.
         val verbosity: String? = null,
-        // whether the plan may also answer web searches, from the same allowance as turns
-        val webSearch: Boolean = true,
         override val seesImages: Boolean? = null,
         override val efforts: Set<ReasoningEffort>? = null,
         // the Codex CLI version reported to the backend, which decides how much of the catalog it returns.

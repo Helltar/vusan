@@ -12,7 +12,7 @@ class ToolActivityTest {
     fun `maps a tool to what it is busy with`() {
         assertEquals(ToolActivity.WRITING, toolActivityFor("sendMessage"))
         assertEquals(ToolActivity.SEARCHING_WEB, toolActivityFor("webSearch"))
-        assertEquals(ToolActivity.SEARCHING_WEB, toolActivityFor("metaSearch"))
+        assertEquals(ToolActivity.SEARCHING_WEB, toolActivityFor("answerFromWeb"))
         assertEquals(ToolActivity.READING_PAGE, toolActivityFor("extractPageContent"))
         assertEquals(ToolActivity.RUNNING_CODE, toolActivityFor("runCommand"))
         assertEquals(ToolActivity.RUNNING_CODE, toolActivityFor("writeSandboxFile"))

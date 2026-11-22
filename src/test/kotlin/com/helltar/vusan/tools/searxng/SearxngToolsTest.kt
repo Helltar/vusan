@@ -70,7 +70,7 @@ class SearxngToolsTest {
         // searxng answers an empty `language` or an unknown `time_range` with a 400, so neither may go out as
         // an empty string.
         val probe = SearchProbe()
-        tools(resultsJson("https://a"), probe = probe).metaSearch("kotlin", timeRange = "", language = "")
+        tools(resultsJson("https://a"), probe = probe).webSearch("kotlin", timeRange = "", language = "")
 
         assertNull(probe.last["language"])
         assertNull(probe.last["time_range"])
@@ -81,7 +81,7 @@ class SearxngToolsTest {
     @Test
     fun `an unsupported time range is dropped rather than sent`() = runBlocking {
         val probe = SearchProbe()
-        tools(resultsJson("https://a"), probe = probe).metaSearch("kotlin", timeRange = "decade")
+        tools(resultsJson("https://a"), probe = probe).webSearch("kotlin", timeRange = "decade")
 
         assertNull(probe.last["time_range"])
     }
@@ -90,7 +90,7 @@ class SearxngToolsTest {
     fun `supported scoping parameters are passed through`() = runBlocking {
         val probe = SearchProbe()
         tools(resultsJson("https://a"), probe = probe)
-            .metaSearch("explosions", categories = "News", timeRange = "Week", language = "en-US")
+            .webSearch("explosions", categories = "News", timeRange = "Week", language = "en-US")
 
         assertEquals("news", probe.last["categories"])
         assertEquals("week", probe.last["time_range"])
@@ -100,7 +100,7 @@ class SearxngToolsTest {
     @Test
     fun `an unknown category falls back to no category filter`() = runBlocking {
         val probe = SearchProbe()
-        tools(resultsJson("https://a"), probe = probe).metaSearch("kotlin", categories = "nonsense")
+        tools(resultsJson("https://a"), probe = probe).webSearch("kotlin", categories = "nonsense")
 
         assertNull(probe.last["categories"])
     }
@@ -111,7 +111,7 @@ class SearxngToolsTest {
             """{"results":[{"url":"https://a","title":"Alpha","content":"first snippet","engine":"e",
                "publishedDate":"2026-07-01"},{"url":"https://b","title":"Beta","content":"second","engine":"e"}]}"""
 
-        val result = tools(body).metaSearch("kotlin")
+        val result = tools(body).webSearch("kotlin")
 
         assertContains(result, "Alpha")
         assertContains(result, "https://a")
@@ -122,7 +122,7 @@ class SearxngToolsTest {
 
     @Test
     fun `maxResults caps how many results are reported`() = runBlocking {
-        val result = tools(resultsJson("https://a", "https://b", "https://c")).metaSearch("kotlin", maxResults = 2)
+        val result = tools(resultsJson("https://a", "https://b", "https://c")).webSearch("kotlin", maxResults = 2)
 
         assertContains(result, "2. T")
         assertTrue("3. T" !in result)
@@ -131,7 +131,7 @@ class SearxngToolsTest {
     @Test
     fun `a direct answer is reported above the results`() = runBlocking {
         val body = """{"results":[{"url":"https://a","title":"T","content":"C","engine":"e"}],"answers":[{"answer":"42"}]}"""
-        val result = tools(body).metaSearch("meaning of life")
+        val result = tools(body).webSearch("meaning of life")
 
         assertContains(result, "Direct answer: 42")
         assertTrue(result.indexOf("Direct answer") < result.indexOf("https://a"))
@@ -139,7 +139,7 @@ class SearxngToolsTest {
 
     @Test
     fun `an empty result set reports no results`() = runBlocking {
-        val result = tools("""{"results":[]}""").metaSearch("kotlin")
+        val result = tools("""{"results":[]}""").webSearch("kotlin")
 
         assertContains(result, "No results found")
     }
@@ -152,17 +152,17 @@ class SearxngToolsTest {
             """{"results":[],"unresponsive_engines":[["brave","Suspended: too many requests"],
                ["duckduckgo","Suspended: CAPTCHA"]]}"""
 
-        val result = toolFailure { tools(body).metaSearch("kotlin") }
+        val result = toolFailure { tools(body).webSearch("kotlin") }
 
         assertTrue("No results found" !in result)
         assertContains(result, "rate-limited")
-        assertContains(result, "webSearch")
+        assertContains(result, "temporarily unavailable")
     }
 
     @Test
     fun `an answer alone is still reported when no links come back`() = runBlocking {
         val body = """{"results":[],"answers":[{"answer":"42"}],"unresponsive_engines":[["brave","Suspended"]]}"""
-        val result = tools(body).metaSearch("meaning of life")
+        val result = tools(body).webSearch("meaning of life")
 
         assertContains(result, "Direct answer: 42")
     }
@@ -172,7 +172,7 @@ class SearxngToolsTest {
         // searxng ignores `engines` with `categories=images` and re-adds the category's stock-photo and icon
         // engines, flooding the results.
         val probe = SearchProbe()
-        tools(imagesJson(1), probe = probe, image = png()).metaSearchImages("red panda")
+        tools(imagesJson(1), probe = probe, image = png()).searchImages("red panda")
 
         assertNull(probe.last["categories"])
         assertContains(probe.last["engines"] ?: "", "bing images")
@@ -185,7 +185,7 @@ class SearxngToolsTest {
         val probe = SearchProbe()
         val result =
             tools(imagesJson(3), outbox = outbox, probe = probe, image = png())
-                .metaSearchImages("red panda", maxResults = 3)
+                .searchImages("red panda", maxResults = 3)
 
         assertTrue(outbox.pending.isEmpty())
         assertTrue(probe.calls.isEmpty(), "the provider was queried for images this chat cannot show")
@@ -195,7 +195,7 @@ class SearxngToolsTest {
     @Test
     fun `image search queues a media group and reports the count`() = runBlocking {
         val outbox = BotOutbox()
-        val result = tools(imagesJson(3), outbox = outbox, image = png()).metaSearchImages("red panda", maxResults = 3)
+        val result = tools(imagesJson(3), outbox = outbox, image = png()).searchImages("red panda", maxResults = 3)
 
         val group = assertIs<BotOutput.PhotoGroup>(outbox.pending.single().output)
         assertEquals(3, group.photos.size)
@@ -205,7 +205,7 @@ class SearxngToolsTest {
     @Test
     fun `a single image is queued on its own rather than as a group`() = runBlocking {
         val outbox = BotOutbox()
-        val result = tools(imagesJson(1), outbox = outbox, image = png()).metaSearchImages("red panda")
+        val result = tools(imagesJson(1), outbox = outbox, image = png()).searchImages("red panda")
 
         assertIs<BotOutput.Photo>(outbox.pending.single().output)
         assertContains(result, "Sent 1 image")
@@ -214,7 +214,7 @@ class SearxngToolsTest {
     @Test
     fun `image search reports nothing sent when no candidate downloads`() = runBlocking {
         val outbox = BotOutbox()
-        val result = tools(imagesJson(2), outbox = outbox, image = null).metaSearchImages("red panda")
+        val result = tools(imagesJson(2), outbox = outbox, image = null).searchImages("red panda")
 
         assertTrue(outbox.pending.isEmpty())
         assertContains(result, "failed to download")
@@ -223,7 +223,7 @@ class SearxngToolsTest {
     @Test
     fun `image search reports no images when the provider returns none`() = runBlocking {
         val outbox = BotOutbox()
-        val result = tools("""{"results":[]}""", outbox = outbox).metaSearchImages("red panda")
+        val result = tools("""{"results":[]}""", outbox = outbox).searchImages("red panda")
 
         assertTrue(outbox.pending.isEmpty())
         assertContains(result, "No images found")
@@ -234,7 +234,7 @@ class SearxngToolsTest {
         val http = Http.createClient(MockEngine { throw java.net.ConnectException("Connection refused") })
         val tools = SearxngTools(SearxngClient(http, BASE_URL), ImageDownloadClient(FileDownloadClient(http)), BotOutbox())
 
-        assertContains(toolFailure { tools.metaSearch("kotlin") }, "temporarily unavailable")
+        assertContains(toolFailure { tools.webSearch("kotlin") }, "temporarily unavailable")
     }
 
     private companion object {

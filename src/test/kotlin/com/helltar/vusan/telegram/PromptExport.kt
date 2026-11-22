@@ -14,6 +14,7 @@ import com.helltar.vusan.config.ElevenLabsTtsConfig
 import com.helltar.vusan.config.GroupLogConfig
 import com.helltar.vusan.config.ImageProviderConfig
 import com.helltar.vusan.config.OpenAiSttConfig
+import com.helltar.vusan.config.WebSearchConfig
 import com.helltar.vusan.config.XaiVideoConfig
 import com.helltar.vusan.config.llm.LlmProviderConfig
 import com.helltar.vusan.config.llm.VisionRuntime
@@ -64,8 +65,8 @@ internal data class PromptExportOptions(
     val sandbox: Boolean = true,
     val images: Boolean = true,
     val videos: Boolean = true,
-    // the plan's researched answer, `answerFromWeb`, exists only where chat runs on the ChatGPT plan
-    val codexSearch: Boolean = true,
+    // the one web search provider, or `none`; `codex` also puts the chat on the plan, which it needs
+    val search: String = "tavily",
     val privateChat: Boolean = false,
 )
 
@@ -100,7 +101,7 @@ internal fun exportPrompt(options: PromptExportOptions): JsonObject {
             put("sandbox", options.sandbox)
             put("images", options.images)
             put("videos", options.videos)
-            put("codexSearch", options.codexSearch)
+            put("search", options.search)
             put("chat", if (options.privateChat) "private" else "group")
         }
         put("system", system)
@@ -126,7 +127,7 @@ internal fun exportPrompt(options: PromptExportOptions): JsonObject {
 /**
  * `./gradlew -q exportPrompt --args="--out /tmp/prompt.json"`. Flags (see [PromptExportOptions]): `--model
  * <id>`, `--personality <file>`, `--username <handle>` (repeatable), `--display-name <name>`, `--no-sandbox`,
- * `--no-images`, `--no-videos`, `--no-codex-search`, `--private`. Without `--out` the JSON goes to stdout,
+ * `--no-images`, `--no-videos`, `--search <tavily|searxng|exa|codex|none>`, `--private`. Without `--out` the JSON goes to stdout,
  * after whatever the log printed.
  */
 fun main(args: Array<String>) {
@@ -152,7 +153,7 @@ private fun parseExportArgs(args: List<String>): Pair<PromptExportOptions, File?
             "--no-sandbox" to { _ -> options = options.copy(sandbox = false) },
             "--no-images" to { _ -> options = options.copy(images = false) },
             "--no-videos" to { _ -> options = options.copy(videos = false) },
-            "--no-codex-search" to { _ -> options = options.copy(codexSearch = false) },
+            "--search" to { flag -> options = options.copy(search = value(flag)) },
             "--private" to { _ -> options = options.copy(privateChat = true) },
             "--out" to { flag -> out = File(value(flag)) },
         )
@@ -210,7 +211,7 @@ private fun exportConfig(options: PromptExportOptions) =
         giphyApiKey = null,
         klipyApiKey = KEY,
         llmProvider =
-            if (options.codexSearch) LlmProviderConfig.Codex(model = options.model, requestTimeout = 60.seconds)
+            if (options.search == "codex") LlmProviderConfig.Codex(model = options.model, requestTimeout = 60.seconds)
             else LlmProviderConfig.OpenAi(apiKey = KEY, model = options.model, requestTimeout = 60.seconds),
         maxConcurrentTurns = 1,
         image = ImageProviderConfig.OpenAi(KEY).takeIf { options.images },
@@ -219,12 +220,21 @@ private fun exportConfig(options: PromptExportOptions) =
         personality = null,
         regolithToken = KEY.takeIf { options.sandbox },
         regolithUrl = "http://127.0.0.1:1".takeIf { options.sandbox },
-        searxngUrl = "http://127.0.0.1:1",
         selfImageFile = null,
-        tavilyApiKey = KEY,
         telegramBotToken = KEY,
+        webSearch = exportWebSearch(options),
         ytDlpCookiesFile = null,
     )
+
+private fun exportWebSearch(options: PromptExportOptions): WebSearchConfig? =
+    when (options.search) {
+        "tavily" -> WebSearchConfig.Tavily(KEY)
+        "searxng" -> WebSearchConfig.Searxng("http://127.0.0.1:1")
+        "exa" -> WebSearchConfig.Exa(KEY)
+        "codex" -> WebSearchConfig.Codex(options.model)
+        "none" -> null
+        else -> error("unknown search provider: ${options.search}")
+    }
 
 private fun refusingTelegramClient(): TelegramClient =
     Proxy.newProxyInstance(TelegramClient::class.java.classLoader, arrayOf(TelegramClient::class.java)) { _, method, _ ->

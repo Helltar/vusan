@@ -2,57 +2,56 @@ package com.helltar.vusan.tools.searxng
 
 internal object SearxngToolDescriptions {
 
-    const val META_SEARCH =
+    const val WEB_SEARCH =
         "Search the web and get back titles, links, and short snippets from many engines at once (Google, Bing, DuckDuckGo, Wikipedia and others). " +
-                "This is the fallback web search: prefer `webSearch` when it is offered, and use this one when `webSearch` failed, returned nothing useful, or is not offered at all. " +
-                "Reach for it directly when a lookup belongs to one area that `categories` can scope, which `webSearch` cannot do. " +
-                "Use `extractPageContent` afterward when a result has to be read in full, or `readPage` when that one is not offered."
+                "Use it whenever the user asks about recent news, facts, or anything that needs a live check. " +
+                "`categories` scopes a lookup to one area, such as news, programming or science. " +
+                "A snippet is a line or two, so use `readPage` afterward when a result has to be read in full."
 
-    const val META_SEARCH_QUERY =
+    const val WEB_SEARCH_QUERY =
         "Search query — a concise phrase or question."
 
-    const val META_SEARCH_MAX_RESULTS =
+    const val WEB_SEARCH_MAX_RESULTS =
         "Number of results to return, from 1 to 15. " +
                 "Prefer 5 to 8."
 
-    const val META_SEARCH_CATEGORIES =
+    const val WEB_SEARCH_CATEGORIES =
         "Search category that scopes the query. " +
                 "Allowed values: `general`, `news`, `it`, `science`, `videos`, `music`, `files`, `social media`, `map`. " +
                 "Use `news` for current events and breaking stories, `it` for programming and software questions, `science` for research and papers. " +
                 "Defaults to `general`."
 
-    const val META_SEARCH_TIME_RANGE =
+    const val WEB_SEARCH_TIME_RANGE =
         "Time window for results. " +
                 "Allowed values: `day`, `week`, `month`, `year`. " +
                 """Use when the user asks about something time-sensitive ("recent", "today", "this week", "latest"). """ +
                 "Leave empty for no time filter."
 
-    const val META_SEARCH_LANGUAGE =
+    const val WEB_SEARCH_LANGUAGE =
         "Language of the results, as a code such as `uk`, `en`, `pl`, or a full locale such as `uk-UA`. " +
                 "Set it to the language the answer should come from, which is usually the language the user wrote in. " +
                 "Leave empty to search every language."
 
-    const val META_SEARCH_IMAGES =
+    const val SEARCH_IMAGES =
         "Search the web for images and send them to the chat. " +
-                "This is the fallback picture search: prefer `searchImages` when it is offered, and use this one when `searchImages` could not download anything, when it sent fewer images than the user wants and they ask for more, or when it is not offered at all. " +
-                "Each call sends its own album, so one call after a short `searchImages` album gives the user a second album rather than a longer one. " +
                 """Use when the user asks to show, send, or find a picture/photo of something — for example "show me a photo of the Eiffel Tower", "send a BMW X6 picture", "find a red panda photo". """ +
                 "Multiple results are sent as one album. " +
+                "Each call sends its own album, so a second call gives the user a second album rather than a longer one. " +
                 "Do not use for animated GIFs (use `searchGifs` instead). " +
                 "This tool does not report what is in each photo, so do not describe their contents as if you had seen them."
 
-    const val META_SEARCH_IMAGES_QUERY =
+    const val SEARCH_IMAGES_QUERY =
         "Image search query — a concise descriptive phrase, e.g. `BMW X6`, `Eiffel Tower at night`, `red panda`."
 
-    const val META_SEARCH_IMAGES_MAX_RESULTS =
+    const val SEARCH_IMAGES_MAX_RESULTS =
         "How many images to return, from 1 to 10. " +
                 "Prefer 3 to 5. " +
                 "When 2 or more images are returned they are sent as a single media group."
 
-    const val META_SEARCH_IMAGES_SEND =
+    const val SEARCH_IMAGES_SEND =
         "Whether the images go to the chat; `true` by default. " +
                 "`false` keeps them for a later call instead, another tool or the sandbox, which takes each by the label the result names."
 
-    const val META_SEARCH_IMAGES_SPOILER =
+    const val SEARCH_IMAGES_SPOILER =
         "`true` sends the images under a spoiler blur that lifts when tapped, for a reveal, a punchline or whatever the user asked to hide."
 }
