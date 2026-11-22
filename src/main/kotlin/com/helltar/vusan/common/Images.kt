@@ -10,6 +10,11 @@ import javax.imageio.ImageWriteParam
 
 private const val JPEG_QUALITY = 0.92f
 
+// the image is decoded whole, and a few kilobytes of png can declare a canvas that fills the heap, so the size
+// is read from the header first. telegram takes no photo whose sides add up past 10000 anyway.
+private const val REENCODE_MAX_SIDES = 10_000
+private const val REENCODE_MAX_PIXELS = 16_000_000L
+
 /**
  * An encoded image's pixel size, or `null` when unreadable. Only the header is decoded, so large files stay
  * cheap.
@@ -34,8 +39,12 @@ internal fun imageDimensions(bytes: ByteArray): Pair<Int, Int>? =
 /**
  * The image re-encoded as a plain 8-bit RGB JPEG at its own size, or `null` when it cannot be decoded.
  * Transparency is flattened onto white, and color profiles, extra channels and bit depths are dropped.
+ * `null` too for an image too large to decode safely.
  */
 internal fun reencodedAsJpeg(bytes: ByteArray): ByteArray? {
+    val (width, height) = imageDimensions(bytes) ?: return null
+    if (width + height > REENCODE_MAX_SIDES || width.toLong() * height > REENCODE_MAX_PIXELS) return null
+
     val source = runCatching { ImageIO.read(ByteArrayInputStream(bytes)) }.getOrNull() ?: return null
 
     // the jpeg writer refuses an alpha channel, so the picture is drawn onto an opaque canvas first
