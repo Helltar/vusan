@@ -82,6 +82,10 @@ Before it: [running a turn](turn.md).
     - **Spoilers** — a tool that sends a photo, a video or an animation takes `spoiler`, carried on the `BotOutput`
       and sent as `has_spoiler`, per photo in an album. No other kind has one, so the document fallback of a
       rejected photo or video arrives uncovered. Text hides a part of itself with `<tg-spoiler>`.
+    - **A photo Telegram cannot process** — `IMAGE_PROCESS_FAILED` (`TelegramErrors.isImageProcessFailed`) comes back
+      for valid images inside every documented limit too, so before degrading to a document `TelegramOutputSender`
+      sends the same pixels once more as a plain RGB JPEG (`common/Images.kt`, `reencodedAsJpeg`). Only when that is
+      refused as well does the photo go out as a document, carrying the original file.
     - **A send that fails after every fallback** — the kind's own fallbacks and the text-as-document one have all
       been tried by then, so `TelegramDelivery` treats the item as not sent: no transcript row is written for it, and a
       comment that was to ride on it as a caption goes out as a message of its own, since the words are the answer and

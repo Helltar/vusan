@@ -1,6 +1,7 @@
 package com.helltar.vusan.telegram.delivery
 
 import com.helltar.vusan.common.escapeHtml
+import com.helltar.vusan.common.reencodedAsJpeg
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.telegram.api
@@ -242,15 +243,15 @@ internal object TelegramOutputSender {
         caption: String?,
         formattingFileNotice: String,
     ) {
-        val send =
-            suspend {
+        val sendAs =
+            suspend { file: InputFile ->
                 sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
                     client.api<Message> {
                         executeAsync(
                             SendPhoto.builder()
                                 .chatId(target.chatId)
                                 .messageThreadId(target.messageThreadId)
-                                .photo(photo.bytes.asInputFile(photo.filename))
+                                .photo(file)
                                 .hasSpoiler(photo.spoiler)
                                 .caption(text)
                                 .parseMode(parseMode)
@@ -259,6 +260,21 @@ internal object TelegramOutputSender {
                         )
                     }
                 }
+            }
+
+        // a plain jpeg of the same pixels still arrives as a photo; when that fails too, the document carries the
+        // original file.
+        val send =
+            suspend {
+                runCatching { sendAs(photo.bytes.asInputFile(photo.filename)) }
+                    .recoverCatching { e ->
+                        e.rethrowIfCancellation()
+                        val jpeg = reencodedAsJpeg(photo.bytes)?.takeIf { e.isImageProcessFailed() } ?: throw e
+
+                        log.warn { "sendPhoto could not process the image for chat=${target.chatId}, retrying it as a jpeg" }
+                        sendAs(jpeg.asInputFile(photo.filename.substringBeforeLast('.') + ".jpg"))
+                    }
+                    .getOrThrow()
             }
 
         sendMediaWithDocumentFallback(

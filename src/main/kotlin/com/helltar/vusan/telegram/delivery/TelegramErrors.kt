@@ -35,6 +35,11 @@ internal fun Throwable.isChatUnreachable(): Boolean {
         "group chat was deactivated" in description
 }
 
+// telegram could not turn a file into a photo. it says so for valid images within every documented limit too,
+// apparently over what the file carries beyond its pixels (a profile, an alpha channel, a bit depth).
+internal fun Throwable.isImageProcessFailed(): Boolean =
+    telegramDescription?.contains("IMAGE_PROCESS_FAILED", ignoreCase = true) == true
+
 // telegram has used both wordings for a missing reply target.
 internal fun Throwable.isReplyMessageNotFound(): Boolean {
     val description = telegramDescription?.lowercase() ?: return false

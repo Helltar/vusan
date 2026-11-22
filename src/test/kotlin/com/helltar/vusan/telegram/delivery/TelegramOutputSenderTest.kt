@@ -1,9 +1,12 @@
 package com.helltar.vusan.telegram.delivery
 
 import com.helltar.vusan.outbox.BotOutput
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
 import java.io.Serializable
 import java.lang.reflect.Proxy
 import java.util.concurrent.CompletableFuture
+import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -83,6 +86,61 @@ class TelegramOutputSenderTest {
         TelegramOutputSender.send(
             client = client.proxy,
             item = BotOutput.Photo(byteArrayOf(1, 2, 3), "chart.bmp"),
+            target = ChatTarget(1L),
+            replyParameters = null,
+            caption = null,
+            formattingFileNotice = "notice",
+        )
+
+        assertEquals(listOf("sendPhoto", "sendDocument"), client.methods)
+    }
+
+    @Test
+    fun `photo telegram cannot process is resent as a jpeg photo`() = runBlocking {
+        val client = RecordingClient(photoProcessingFailures = 1)
+
+        TelegramOutputSender.send(
+            client = client.proxy,
+            item = BotOutput.Photo(translucentPng(), "image.png"),
+            target = ChatTarget(1L),
+            replyParameters = null,
+            caption = null,
+            formattingFileNotice = "notice",
+        )
+
+        assertEquals(listOf("sendPhoto", "sendPhoto"), client.methods)
+
+        val retried = assertIs<SendPhoto>(client.requests.last()).photo
+        val bytes = retried.newMediaStream.readBytes()
+
+        assertEquals("image.jpg", retried.mediaName)
+        assertContentEquals(byteArrayOf(0xFF.toByte(), 0xD8.toByte()), bytes.copyOf(2))
+    }
+
+    @Test
+    fun `photo refused again as a jpeg arrives as the original document`() = runBlocking {
+        val client = RecordingClient(photoProcessingFailures = 2)
+
+        TelegramOutputSender.send(
+            client = client.proxy,
+            item = BotOutput.Photo(translucentPng(), "image.png"),
+            target = ChatTarget(1L),
+            replyParameters = null,
+            caption = null,
+            formattingFileNotice = "notice",
+        )
+
+        assertEquals(listOf("sendPhoto", "sendPhoto", "sendDocument"), client.methods)
+        assertEquals("image.png", assertIs<SendDocument>(client.requests.last()).document.mediaName)
+    }
+
+    @Test
+    fun `undecodable photo telegram cannot process goes straight to a document`() = runBlocking {
+        val client = RecordingClient(photoProcessingFailures = 1)
+
+        TelegramOutputSender.send(
+            client = client.proxy,
+            item = BotOutput.Photo(byteArrayOf(1, 2, 3), "image.png"),
             target = ChatTarget(1L),
             replyParameters = null,
             caption = null,
@@ -339,6 +397,15 @@ class TelegramOutputSenderTest {
         assertEquals(listOf("sendRichMessage", "sendDocument", "sendMessage"), client.methods)
     }
 
+    private fun translucentPng(): ByteArray {
+        val image = BufferedImage(4, 3, BufferedImage.TYPE_INT_ARGB)
+        val output = ByteArrayOutputStream()
+
+        ImageIO.write(image, "png", output)
+
+        return output.toByteArray()
+    }
+
     // records every request executed; production only calls `executeAsync`, so a reflective proxy spares
     // implementing all of TelegramClient.
     private class RecordingClient(
@@ -349,6 +416,7 @@ class TelegramOutputSenderTest {
         private val failRichMessage: Boolean = false,
         private val failDocument: Boolean = false,
         private val failVideoNote: Boolean = false,
+        private var photoProcessingFailures: Int = 0,
     ) {
         val methods = mutableListOf<String>()
         val requests = mutableListOf<Any>()
@@ -380,6 +448,11 @@ class TelegramOutputSenderTest {
                 failHtmlCaptionOnce && method == "sendPhoto" -> {
                     failHtmlCaptionOnce = false
                     "Bad Request: can't parse entities"
+                }
+
+                photoProcessingFailures > 0 && method == "sendPhoto" -> {
+                    photoProcessingFailures--
+                    "Bad Request: IMAGE_PROCESS_FAILED"
                 }
 
                 failRichMessage && method == "sendRichMessage" -> "Bad Request: can't parse entities"
