@@ -42,7 +42,8 @@ data class FoundImage(val url: String, val description: String? = null)
 /**
  * Downloads [candidates] in order, keeps up to [limit] the chat can show as photos on the turn's shelf,
  * queues them as one photo or a media group unless [send] is off, under a spoiler when [spoiler] is on, and
- * returns the text reported to the model.
+ * returns the text reported to the model. [minShortSide] skips a candidate whose shorter side is smaller, for
+ * a provider whose candidates include a page's icons and thumbnails.
  * A chat refusing photos is answered before the first download when they are to be sent.
  */
 suspend fun ImageDownloadClient.deliverImageResults(
@@ -52,6 +53,7 @@ suspend fun ImageDownloadClient.deliverImageResults(
     outbox: BotOutbox,
     send: Boolean = true,
     spoiler: Boolean = false,
+    minShortSide: Int = 0,
 ): String {
     if (send) outbox.photosRefusedReply()?.let { return it }
 
@@ -69,7 +71,7 @@ suspend fun ImageDownloadClient.deliverImageResults(
         attempts++
 
         val bytes =
-            runCatching { download(candidate.url) }
+            runCatching { download(candidate.url, minShortSide) }
                 .onFailure { error ->
                     error.rethrowIfCancellation()
                     log.warn(error) { "image download error query=[$query] url=[${candidate.url}]" }

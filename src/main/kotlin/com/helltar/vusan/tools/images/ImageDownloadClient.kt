@@ -14,8 +14,11 @@ import kotlin.math.min
  */
 class ImageDownloadClient(private val downloader: FileDownloadClient) {
 
-    /** The bytes, or `null` when the response is not an image telegram would show. */
-    suspend fun download(url: String): ByteArray? {
+    /**
+     * The bytes, or `null` when the response is not an image telegram would show, or one whose shorter side is
+     * under [minShortSide] pixels.
+     */
+    suspend fun download(url: String, minShortSide: Int = 0): ByteArray? {
         val result = downloader.download(url.withScheme(), maxBytes = MAX_PHOTO_BYTES.toLong())
         if (result !is FileDownloadResult.Success) return null
         val bytes = result.bytes
@@ -28,6 +31,11 @@ class ImageDownloadClient(private val downloader: FileDownloadClient) {
         imageDimensions(bytes)?.let { (w, h) ->
             if (!isTelegramPhotoCompatible(w, h)) {
                 log.info { "download: incompatible dimensions ${w}x$h, skipping" }
+                return null
+            }
+
+            if (min(w, h) < minShortSide) {
+                log.info { "download: ${w}x$h is under ${minShortSide}px, skipping" }
                 return null
             }
         }

@@ -27,7 +27,26 @@ class ExaClient(private val http: HttpClient, private val apiKey: String) {
                     numResults = numResults,
                     category = category,
                     startPublishedDate = startPublishedDate,
-                    contents = ExaSearchContents(ExaHighlights(highlightChars)),
+                    contents = ExaSearchContents(highlights = ExaHighlights(highlightChars)),
+                ),
+            )
+        }.body()
+    }
+
+    /** A search that returns, for each page found, its preview picture and up to [imagesPerPage] of its images. */
+    suspend fun searchImages(query: String, numResults: Int, imagesPerPage: Int): ExaSearchResponse {
+        require(query.isNotBlank()) { "Query must not be blank" }
+        require(numResults in 1..MAX_RESULTS) { "numResults must be between 1 and $MAX_RESULTS" }
+
+        return http.post("$BASE_URL/search") {
+            header(API_KEY_HEADER, apiKey)
+            contentType(ContentType.Application.Json)
+            setBody(
+                ExaSearchRequest(
+                    query = query,
+                    type = SEARCH_TYPE,
+                    numResults = numResults,
+                    contents = ExaSearchContents(extras = ExaExtras(imagesPerPage)),
                 ),
             )
         }.body()

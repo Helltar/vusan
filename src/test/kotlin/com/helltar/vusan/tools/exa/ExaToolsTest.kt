@@ -1,6 +1,11 @@
 package com.helltar.vusan.tools.exa
 
 import com.helltar.vusan.infra.Http
+import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.request.ChatCapabilities
+import com.helltar.vusan.tools.files.FileDownloadClient
+import com.helltar.vusan.tools.images.ImageDownloadClient
 import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -10,6 +15,9 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
+import java.awt.image.BufferedImage
+import java.io.ByteArrayOutputStream
+import javax.imageio.ImageIO
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.int
@@ -19,6 +27,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -32,18 +41,29 @@ class ExaToolsTest {
 
     private val lastBody: JsonObject get() = sent.last().second
 
-    private fun tools(body: String = RESULTS): ExaTools {
+    /** Answers exa's api with [body] and the image host with the picture named by the path, or a 404. */
+    private fun tools(body: String = RESULTS, outbox: BotOutbox = BotOutbox(), images: Map<String, ByteArray> = emptyMap()): ExaTools {
         val http =
             Http.createClient(
                 MockEngine { request ->
+                    if (request.url.host == IMAGE_HOST) {
+                        return@MockEngine images[request.url.encodedPath]
+                            ?.let { respond(it, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "image/png")) }
+                            ?: respond("nope", HttpStatusCode.NotFound)
+                    }
+
                     assertEquals("exa-test", request.headers["x-api-key"])
                     sent += request.url.encodedPath to Json.parseToJsonElement((request.body as TextContent).text).jsonObject
                     respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()))
                 },
             )
 
-        return ExaTools(ExaClient(http, "exa-test"))
+        return ExaTools(ExaClient(http, "exa-test"), ImageDownloadClient(FileDownloadClient(http)), outbox)
     }
+
+    private fun png(width: Int, height: Int): ByteArray =
+        ByteArrayOutputStream().also { ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", it) }
+            .toByteArray()
 
     // the shared json omits defaults, so the count has none: a defaulted one would stay unsent and exa would
     // pick ten
@@ -97,6 +117,52 @@ class ExaToolsTest {
     }
 
     @Test
+    fun `an image search asks for each page's images and no excerpts`() = runBlocking {
+        tools("""{"results":[]}""").searchImages("red panda")
+
+        val contents = lastBody.getValue("contents").jsonObject
+
+        assertEquals("/search", sent.single().first)
+        assertTrue(contents.getValue("extras").jsonObject.getValue("imageLinks").jsonPrimitive.int > 0)
+        assertNull(contents["highlights"])
+    }
+
+    @Test
+    fun `previews go first, and decorations, duplicates and small pictures are skipped`() = runBlocking {
+        val body =
+            """{"results":[""" +
+                    """{"url":"https://a.test","image":"https://$IMAGE_HOST/preview-a.png","extras":{"imageLinks":[""" +
+                    """"https://$IMAGE_HOST/preview-a.png?v=2","https://$IMAGE_HOST/site-logo.png","https://$IMAGE_HOST/cc.svg.png",""" +
+                    """"https://$IMAGE_HOST/thumb.png","https://$IMAGE_HOST/in-page.png","data:image/png;base64,AAAA"]}},""" +
+                    """{"url":"https://b.test","image":"https://$IMAGE_HOST/preview-b.png"}]}"""
+
+        val images =
+            mapOf(
+                "/preview-a.png" to png(800, 600),
+                "/preview-b.png" to png(640, 480),
+                "/site-logo.png" to png(400, 400),
+                "/cc.svg.png" to png(400, 400),
+                "/thumb.png" to png(120, 90),
+                "/in-page.png" to png(1024, 768),
+            )
+
+        val outbox = BotOutbox()
+        val result = tools(body, outbox, images).searchImages("red panda", maxResults = 10)
+        val group = assertIs<BotOutput.PhotoGroup>(outbox.pending.single().output)
+
+        assertContains(result, "Sent 3 images")
+        assertEquals(listOf(800, 640, 1024), group.photos.map { ImageIO.read(it.bytes.inputStream()).width })
+    }
+
+    @Test
+    fun `an image search in a chat that refuses photos asks exa nothing`() = runBlocking {
+        val result = tools(outbox = BotOutbox(ChatCapabilities(photos = false))).searchImages("red panda")
+
+        assertContains(result, "does not accept photos")
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
     fun `a page is read inside its own block`() = runBlocking {
         val result = tools("""{"results":[{"url":"https://example.test/tides","text":"High water at noon."}],"statuses":[]}""")
             .extractPageContent("https://example.test/tides")
@@ -124,5 +190,9 @@ class ExaToolsTest {
 
         assertContains(message, "CRAWL_NOT_FOUND")
         assertContains(message, "`readPage`")
+    }
+
+    private companion object {
+        const val IMAGE_HOST = "93.184.216.34"
     }
 }

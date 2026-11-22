@@ -274,7 +274,7 @@ class ToolCatalogFactory(
 
             tavilyClient?.let { tools(TavilyTools(it, imageDownloadClient, outbox)) }
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
-            exaClient?.let { tools(ExaTools(it)) }
+            exaClient?.let { tools(ExaTools(it, imageDownloadClient, outbox)) }
             codexSearchClient?.let { tools(CodexSearchTools(it)) }
             tools(PageTools(pageReader))
             sandboxClient?.let { client ->

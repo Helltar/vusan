@@ -13,11 +13,18 @@ data class ExaSearchRequest(
     val contents: ExaSearchContents,
 )
 
+// one of the two: excerpts for a web search, a page's image links for a picture search
 @Serializable
-data class ExaSearchContents(val highlights: ExaHighlights)
+data class ExaSearchContents(
+    val highlights: ExaHighlights? = null,
+    val extras: ExaExtras? = null,
+)
 
 @Serializable
 data class ExaHighlights(val maxCharacters: Int)
+
+@Serializable
+data class ExaExtras(val imageLinks: Int)
 
 @Serializable
 data class ExaContentsRequest(
@@ -44,7 +51,13 @@ data class ExaResult(
     val publishedDate: String? = null,
     val highlights: List<String> = emptyList(),
     val text: String? = null,
+    // the page's own preview picture, its `og:image`
+    val image: String? = null,
+    val extras: ExaResultExtras? = null,
 )
+
+@Serializable
+data class ExaResultExtras(val imageLinks: List<String> = emptyList())
 
 @Serializable
 data class ExaStatus(

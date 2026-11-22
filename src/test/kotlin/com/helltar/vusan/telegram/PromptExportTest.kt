@@ -55,7 +55,7 @@ class PromptExportTest {
 
         assertEquals(setOf("webSearch", "searchImages", "extractPageContent"), searchTools("tavily"))
         assertEquals(setOf("webSearch", "searchImages"), searchTools("searxng"))
-        assertEquals(setOf("webSearch", "extractPageContent"), searchTools("exa"))
+        assertEquals(setOf("webSearch", "searchImages", "extractPageContent"), searchTools("exa"))
         assertEquals(setOf("answerFromWeb"), searchTools("codex"))
         assertEquals(emptySet(), searchTools("none"))
     }

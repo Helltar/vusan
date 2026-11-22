@@ -3,16 +3,26 @@ package com.helltar.vusan.tools.exa
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.limitTo
 import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
+import com.helltar.vusan.tools.images.FoundImage
+import com.helltar.vusan.tools.images.ImageDownloadClient
+import com.helltar.vusan.tools.images.MAX_IMAGE_RESULTS
+import com.helltar.vusan.tools.images.deliverImageResults
+import com.helltar.vusan.tools.images.photosRefusedReply
 import com.helltar.vusan.tools.suspendToolGuard
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
 
-class ExaTools(private val client: ExaClient) : ToolSet {
+class ExaTools(
+    private val client: ExaClient,
+    private val imageDownloader: ImageDownloadClient,
+    private val outbox: BotOutbox,
+) : ToolSet {
 
     @Tool(ExaToolDescriptions.WEB_SEARCH, readOnly = true, copiedToSandbox = true)
     suspend fun webSearch(
@@ -71,6 +81,32 @@ class ExaTools(private val client: ExaClient) : ToolSet {
         }.trim().limitTo(MAX_SEARCH_OUTPUT_CHARS)
     }
 
+    @Tool(ExaToolDescriptions.SEARCH_IMAGES)
+    suspend fun searchImages(
+        @Arg(ExaToolDescriptions.SEARCH_IMAGES_QUERY)
+        query: String,
+        @Arg(ExaToolDescriptions.SEARCH_IMAGES_MAX_RESULTS)
+        maxResults: Int = 5,
+        @Arg(ExaToolDescriptions.SEARCH_IMAGES_SEND)
+        send: Boolean = true,
+        @Arg(ExaToolDescriptions.SEARCH_IMAGES_SPOILER)
+        spoiler: Boolean = false,
+    ): String = suspendToolGuard {
+        if (send) outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
+
+        val response = client.searchImages(query, numResults = IMAGE_PAGES, imagesPerPage = IMAGES_PER_PAGE)
+
+        imageDownloader.deliverImageResults(
+            query = query,
+            candidates = imageCandidates(response.results).map { FoundImage(url = it) },
+            limit = maxResults.coerceIn(1, MAX_IMAGE_RESULTS),
+            outbox = outbox,
+            send = send,
+            spoiler = spoiler,
+            minShortSide = MIN_IMAGE_SIDE,
+        )
+    }
+
     @Tool(ExaToolDescriptions.EXTRACT_PAGE_CONTENT, readOnly = true, copiedToSandbox = true)
     suspend fun extractPageContent(
         @Arg(ExaToolDescriptions.EXTRACT_PAGE_URL)
@@ -114,8 +150,43 @@ class ExaTools(private val client: ExaClient) : ToolSet {
         // a real page's body readable; readPage continues by offset.
         const val MAX_EXTRACT_CHARS = 16_000
 
+        // a picture search reads ten pages, at the price of up to ten results, and a few images from each
+        const val IMAGE_PAGES = 10
+        const val IMAGES_PER_PAGE = 5
+
+        // a page's images include its license badges, icons and 120px thumbnails of the picture itself
+        const val MIN_IMAGE_SIDE = 200
+
         val allowedCategories = setOf("news", "publication", "company", "people")
         val undatedCategories = setOf("company", "people")
         val timeRanges: Map<String, Duration> = mapOf("day" to 1.days, "week" to 7.days, "month" to 30.days, "year" to 365.days)
     }
 }
+
+/**
+ * The image URLs worth downloading, best first: every page's own preview picture in rank order, then the
+ * images inside the pages. A preview is the picture a page chose to stand for it, so it is the likeliest
+ * match. The same picture is often linked twice with a different query string, so the address without one
+ * decides duplicates.
+ */
+private fun imageCandidates(results: List<ExaResult>): List<String> {
+    val previews = results.mapNotNull { it.image }
+    val inPages = results.flatMap { it.extras?.imageLinks.orEmpty() }
+
+    return (previews + inPages)
+        .map { it.trim() }
+        .filter { it.startsWith("https://") || it.startsWith("http://") }
+        .filterNot { it.isPageDecoration() }
+        .distinctBy { it.substringBefore('?') }
+}
+
+private fun String.isPageDecoration(): Boolean {
+    val path = substringBefore('?').lowercase()
+    val name = path.substringAfterLast('/')
+
+    return ".svg" in path || ignoredImageNames.any { it in name }
+}
+
+// what a page shows besides its pictures; a `.svg` is a drawing, and a wikimedia thumbnail of one ends in
+// `.svg.png`
+private val ignoredImageNames = listOf("logo", "icon", "favicon", "sprite", "avatar", "badge")

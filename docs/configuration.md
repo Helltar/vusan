@@ -155,7 +155,7 @@ summary says so in one line.
 
 | Variable              | Enables                                    | Notes                                                  |
 |-----------------------|--------------------------------------------|--------------------------------------------------------|
-| `WEB_SEARCH_PROVIDER` | Web search; image search on some providers | See [Web search](#web-search)                          |
+| `WEB_SEARCH_PROVIDER` | Web search; image search on most providers | See [Web search](#web-search)                          |
 | `GIPHY_API_KEY`       | GIF lookup                                 | See [GIFs](#gifs-memes-and-clips)                      |
 | `KLIPY_API_KEY`       | GIF, meme and clip lookup                  | Wins over Giphy; see [GIFs](#gifs-memes-and-clips)     |
 | `ELEVENLABS_API_KEY`  | Voice and round video messages             | See [Voice output](#voice-output)                      |
@@ -183,13 +183,14 @@ tools are offered, and when it fails no other one stands in.
 |-----------------------|----------------------------------------------------------|---------------------------------------------------|
 | `tavily`              | `TAVILY_API_KEY`                                         | `webSearch`, `searchImages`, `extractPageContent` |
 | `searxng`             | `SEARXNG_URL`                                            | `webSearch`, `searchImages`                       |
-| `exa`                 | `EXA_API_KEY`                                            | `webSearch`, `extractPageContent`                 |
+| `exa`                 | `EXA_API_KEY`                                            | `webSearch`, `searchImages`, `extractPageContent` |
 | `codex`               | `LLM_PROVIDER` or `LLM_FALLBACK_PROVIDER` set to `codex` | `answerFromWeb`                                   |
 
 - **Tavily** — page extracts in the results, picture search, and pages rendered before they are read.
 - **SearXNG** — self-hosted and free per call; short snippets, so pages are read with `readPage`,
   and search can be scoped by category and language.
-- **Exa** — the passages of each page that bear on the query, and page contents. No picture search.
+- **Exa** — the passages of each page that bear on the query, page contents, and pictures taken from
+  the pages it finds.
 - **`codex`** — a researched answer with its sources on the
   [ChatGPT subscription](providers.md#chatgpt-subscription) the chat runs on, rather than a list of
   results. It is slower, and each search spends the plan.

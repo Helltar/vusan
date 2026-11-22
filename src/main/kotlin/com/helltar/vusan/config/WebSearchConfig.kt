@@ -20,7 +20,7 @@ sealed interface WebSearchConfig {
         override val name: String = "searxng"
     }
 
-    /** Exa: web search with query-relevant excerpts, and page contents. */
+    /** Exa: web search with query-relevant excerpts, pictures from the pages it finds, and page contents. */
     data class Exa(val apiKey: String) : WebSearchConfig {
         override val name: String = "exa"
     }
