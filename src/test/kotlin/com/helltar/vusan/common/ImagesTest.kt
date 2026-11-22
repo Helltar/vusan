@@ -80,6 +80,17 @@ class ImagesTest {
         assertEquals(64 to 48, imageDimensions(assertNotNull(reencodedAsJpeg(webp))))
     }
 
+    // a lossless webp decodes into a whole raster before it is subsampled: 4100x4100, one color, is 16.8
+    // megapixels in 712 bytes
+    @Test
+    fun `a webp past what a whole raster may take is measured but not decoded`() {
+        val webp = checkNotNull(javaClass.getResource("/images/solid-4100x4100-lossless.webp")).readBytes()
+
+        assertEquals(4_100 to 4_100, imageDimensions(webp))
+        assertNull(reencodedAsJpeg(webp))
+        assertNull(pictureHash(webp))
+    }
+
     @Test
     fun `this runtime reads and writes jpeg and reads webp`() {
         assertEquals(mapOf("jpeg" to true, "webp" to true), workingImageCodecs())

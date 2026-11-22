@@ -12,8 +12,13 @@ import javax.imageio.ImageWriteParam
 private const val JPEG_QUALITY = 0.92f
 
 // a few kilobytes of png can declare a canvas no photo has, and decoding walks every declared pixel even when
-// only some are kept, so the size is read from the header first. 64 megapixels is past any camera's photo.
-private const val DECODE_MAX_PIXELS = 64_000_000L
+// only some are kept, so the size is read from the header first. the jdk's jpeg and png readers decode a row at
+// a time and keep only the rows a subsampled read asks for, so for them the cap is past any camera's photo; any
+// other reader may build the whole raster first (webp's lossless one does), so it gets what a full 4-byte raster
+// can take beside the rest of the heap.
+private const val DECODE_MAX_PIXELS_STREAMED = 64_000_000L
+private const val DECODE_MAX_PIXELS = 16_000_000L
+private val STREAMED_FORMATS = setOf("jpeg", "png")
 
 // telegram shows a photo at most this large on its long side, and scales a larger one down itself
 private const val REENCODE_MAX_LONG_SIDE = 2560
@@ -108,7 +113,8 @@ internal fun workingImageCodecs(): Map<String, Boolean> {
 
 /**
  * The image decoded with its long side at most [maxLongSide]: a larger one is read every n-th pixel, so its
- * full canvas is never allocated. `null` when it is unreadable or declares more than [DECODE_MAX_PIXELS].
+ * full canvas is never allocated by a reader that decodes a row at a time. `null` when it is unreadable or
+ * declares more pixels than its reader is trusted with.
  */
 private fun decodedWithin(bytes: ByteArray, maxLongSide: Int): BufferedImage? =
     runCatching {
@@ -120,7 +126,10 @@ private fun decodedWithin(bytes: ByteArray, maxLongSide: Int): BufferedImage? =
                 val width = reader.getWidth(0)
                 val height = reader.getHeight(0)
 
-                if (width <= 0 || height <= 0 || width.toLong() * height > DECODE_MAX_PIXELS) return@use null
+                val streamed = reader.formatName.lowercase() in STREAMED_FORMATS
+                val maxPixels = if (streamed) DECODE_MAX_PIXELS_STREAMED else DECODE_MAX_PIXELS
+
+                if (width <= 0 || height <= 0 || width.toLong() * height > maxPixels) return@use null
 
                 val step = (maxOf(width, height) + maxLongSide - 1) / maxLongSide
                 val param = reader.defaultReadParam.apply { if (step > 1) setSourceSubsampling(step, step, 0, 0) }
