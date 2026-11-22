@@ -276,7 +276,7 @@ class ToolCatalogFactory(
             searxngClient?.let { tools(SearxngTools(it, imageDownloadClient, outbox)) }
             exaClient?.let { tools(ExaTools(it, imageDownloadClient, outbox)) }
             codexSearchClient?.let { tools(CodexSearchTools(it)) }
-            tools(PageTools(pageReader))
+            tools(PageTools(pageReader, imageDownloadClient, outbox))
             sandboxClient?.let { client ->
                 context.personKeyOrNull?.let { person ->
                     // one handle per turn: a site is published from the sandbox the commands ran in, and a

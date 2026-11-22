@@ -87,7 +87,7 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 ### Looks things up
 
 - **Web search** — searches the web and reads the pages it finds.
-- **Links** — reads a web page you send and answers from it.
+- **Links** — reads a web page you send and answers from it, or sends you its pictures.
 - **Image search** — finds pictures on the web and sends them.
 - **Telegram channels** — recaps and searches public channel posts, pictures included.
 - **YouTube** — finds a video by name or link, sends its video or audio, and answers from its subtitles.

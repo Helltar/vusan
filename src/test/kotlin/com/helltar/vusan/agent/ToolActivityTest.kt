@@ -20,6 +20,7 @@ class ToolActivityTest {
         assertEquals(ToolActivity.WATCHING_VIDEO, toolActivityFor("describeVideo"))
         assertEquals(ToolActivity.DRAWING, toolActivityFor("generateImage"))
         assertEquals(ToolActivity.SEARCHING_IMAGES, toolActivityFor("searchImages"))
+        assertEquals(ToolActivity.SEARCHING_IMAGES, toolActivityFor("pageImages"))
         assertEquals(ToolActivity.SEARCHING_GIF, toolActivityFor("searchGifs"))
         assertEquals(ToolActivity.DOWNLOADING_VIDEO, toolActivityFor("downloadVideo"))
         assertEquals(ToolActivity.DOWNLOADING_AUDIO, toolActivityFor("playFullTrack"))

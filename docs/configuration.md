@@ -175,8 +175,8 @@ approval.
 
 ### Web search
 
-Reading a link works on any setup. Search comes from the one provider `WEB_SEARCH_PROVIDER` names,
-with the setting that provider needs; the settings of the others are ignored. Only that provider's
+Reading a link and sending the pictures from one work on any setup. Search comes from the one
+provider `WEB_SEARCH_PROVIDER` names, with the setting that provider needs; the settings of the others are ignored. Only that provider's
 tools are offered, and when it fails no other one stands in.
 
 | `WEB_SEARCH_PROVIDER` | Needs                                                    | Tools                                             |

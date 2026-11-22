@@ -4,13 +4,25 @@ import com.helltar.vusan.tools.Arg
 import com.helltar.vusan.tools.Tool
 import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.common.xmlBlock
+import com.helltar.vusan.outbox.BotOutbox
+import com.helltar.vusan.tools.images.FoundImage
+import com.helltar.vusan.tools.images.ImageDownloadClient
+import com.helltar.vusan.tools.images.MAX_IMAGE_RESULTS
+import com.helltar.vusan.tools.images.MIN_PAGE_PHOTO_SIDE
+import com.helltar.vusan.tools.images.deliverImageResults
+import com.helltar.vusan.tools.images.pagePhotoCandidates
+import com.helltar.vusan.tools.images.photosRefusedReply
 import com.helltar.vusan.tools.requireToolText
 import com.helltar.vusan.tools.suspendToolGuard
 
 internal const val MAX_PAGE_TEXT_CHARS = 16_000
 private const val MAX_URL_CHARS = 2_048
 
-class PageTools(private val reader: PageReader) : ToolSet {
+class PageTools(
+    private val reader: PageReader,
+    private val imageDownloader: ImageDownloadClient,
+    private val outbox: BotOutbox,
+) : ToolSet {
 
     @Tool(PageToolDescriptions.READ_PAGE, readOnly = true, copiedToSandbox = true)
     suspend fun readPage(
@@ -63,5 +75,44 @@ class PageTools(private val reader: PageReader) : ToolSet {
                 append("The page goes on. Continue reading with offset=$end.")
             }
         }
+    }
+
+    @Tool(PageToolDescriptions.PAGE_IMAGES)
+    suspend fun pageImages(
+        @Arg(PageToolDescriptions.PAGE_IMAGES_URL)
+        url: String,
+        @Arg(PageToolDescriptions.PAGE_IMAGES_MAX_RESULTS)
+        maxResults: Int = 5,
+        @Arg(PageToolDescriptions.PAGE_IMAGES_SEND)
+        send: Boolean = true,
+        @Arg(PageToolDescriptions.PAGE_IMAGES_SPOILER)
+        spoiler: Boolean = false,
+    ): String = suspendToolGuard {
+        val target = url.requireToolText("URL", MAX_URL_CHARS)
+
+        if (send) outbox.photosRefusedReply()?.let { return@suspendToolGuard it }
+
+        val page =
+            when (val found = reader.images(target)) {
+                is PageImages.Found -> found
+                is PageImages.NotReadable -> error("Cannot read $target: ${found.reason}.")
+            }
+
+        val candidates = pagePhotoCandidates(page.urls)
+
+        if (candidates.isEmpty()) {
+            return@suspendToolGuard "No pictures found on $target. A page that loads them with scripts shows none here."
+        }
+
+        imageDownloader.deliverImageResults(
+            query = page.title ?: target,
+            candidates = candidates.map { FoundImage(url = it) },
+            limit = maxResults.coerceIn(1, MAX_IMAGE_RESULTS),
+            outbox = outbox,
+            send = send,
+            spoiler = spoiler,
+            minShortSide = MIN_PAGE_PHOTO_SIDE,
+            skipLookalikes = true,
+        )
     }
 }

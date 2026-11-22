@@ -6,6 +6,7 @@ import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.tools.files.FileDownloadClient
 import com.helltar.vusan.tools.images.ImageDownloadClient
+import com.helltar.vusan.tools.images.testPicture
 import com.helltar.vusan.tools.toolFailure
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -15,8 +16,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
-import java.awt.image.BufferedImage
-import java.io.ByteArrayOutputStream
 import javax.imageio.ImageIO
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -60,10 +59,6 @@ class ExaToolsTest {
 
         return ExaTools(ExaClient(http, "exa-test"), ImageDownloadClient(FileDownloadClient(http)), outbox)
     }
-
-    private fun png(width: Int, height: Int): ByteArray =
-        ByteArrayOutputStream().also { ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", it) }
-            .toByteArray()
 
     // the shared json omits defaults, so the count has none: a defaulted one would stay unsent and exa would
     // pick ten
@@ -138,12 +133,12 @@ class ExaToolsTest {
 
         val images =
             mapOf(
-                "/preview-a.png" to png(800, 600),
-                "/preview-b.png" to png(640, 480),
-                "/site-logo.png" to png(400, 400),
-                "/cc.svg.png" to png(400, 400),
-                "/thumb.png" to png(120, 90),
-                "/in-page.png" to png(1024, 768),
+                "/preview-a.png" to testPicture(800, 600, scene = 1),
+                "/preview-b.png" to testPicture(640, 480, scene = 2),
+                "/site-logo.png" to testPicture(400, 400, scene = 3),
+                "/cc.svg.png" to testPicture(400, 400, scene = 4),
+                "/thumb.png" to testPicture(120, 90, scene = 5),
+                "/in-page.png" to testPicture(1024, 768, scene = 6),
             )
 
         val outbox = BotOutbox()

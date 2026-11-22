@@ -1,5 +1,6 @@
 package com.helltar.vusan.common
 
+import com.helltar.vusan.tools.images.testPicture
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -9,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ImagesTest {
 
@@ -39,5 +41,23 @@ class ImagesTest {
     @Test
     fun `bytes that are no image are not re-encoded`() {
         assertNull(reencodedAsJpeg(byteArrayOf(1, 2, 3)))
+    }
+
+    @Test
+    fun `one picture hashes alike at any size and in another format, two pictures do not`() {
+        val large = assertNotNull(pictureHash(testPicture(1200, 800, scene = 1)))
+        val small = assertNotNull(pictureHash(testPicture(300, 200, scene = 1)))
+        val jpeg = assertNotNull(pictureHash(assertNotNull(reencodedAsJpeg(testPicture(640, 427, scene = 1)))))
+        val other = assertNotNull(pictureHash(testPicture(1200, 800, scene = 2)))
+
+        // jpeg noise flips a few of the comparisons between flat neighbors: 5 bits here
+        assertTrue((large xor small).countOneBits() <= 2)
+        assertTrue((large xor jpeg).countOneBits() <= 8)
+        assertTrue((large xor other).countOneBits() > 16)
+    }
+
+    @Test
+    fun `bytes that are no image have no picture hash`() {
+        assertNull(pictureHash("not an image".toByteArray()))
     }
 }

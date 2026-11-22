@@ -1,6 +1,7 @@
 package com.helltar.vusan.common
 
 import java.awt.Color
+import java.awt.Image
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -14,6 +15,10 @@ private const val JPEG_QUALITY = 0.92f
 // is read from the header first. telegram takes no photo whose sides add up past 10000 anyway.
 private const val REENCODE_MAX_SIDES = 10_000
 private const val REENCODE_MAX_PIXELS = 16_000_000L
+
+// a difference hash compares each of 8 rows of 9 shrunk pixels with its right neighbor, one bit per pair
+private const val HASH_COLUMNS = 9
+private const val HASH_ROWS = 8
 
 /**
  * An encoded image's pixel size, or `null` when unreadable. Only the header is decoded, so large files stay
@@ -75,4 +80,35 @@ internal fun reencodedAsJpeg(bytes: ByteArray): ByteArray? {
     }
 
     return output.toByteArray()
+}
+
+/**
+ * A 64-bit difference hash of the picture: two encodings of one photo, at other sizes or qualities, differ in
+ * a few bits, two different photos in many. `null` when it cannot be decoded safely.
+ */
+internal fun pictureHash(bytes: ByteArray): Long? {
+    val (width, height) = imageDimensions(bytes) ?: return null
+    if (width + height > REENCODE_MAX_SIDES || width.toLong() * height > REENCODE_MAX_PIXELS) return null
+
+    val source = runCatching { ImageIO.read(ByteArrayInputStream(bytes)) }.getOrNull() ?: return null
+
+    // averaging rather than the default nearest pixel, which would hash the noise of whichever pixels it hit
+    val shrunk = BufferedImage(HASH_COLUMNS, HASH_ROWS, BufferedImage.TYPE_BYTE_GRAY)
+
+    shrunk.createGraphics().apply {
+        drawImage(source.getScaledInstance(HASH_COLUMNS, HASH_ROWS, Image.SCALE_AREA_AVERAGING), 0, 0, null)
+        dispose()
+    }
+
+    var hash = 0L
+
+    for (y in 0 until HASH_ROWS) {
+        for (x in 0 until HASH_COLUMNS - 1) {
+            if (shrunk.raster.getSample(x, y, 0) > shrunk.raster.getSample(x + 1, y, 0)) {
+                hash = hash or (1L shl (y * (HASH_COLUMNS - 1) + x))
+            }
+        }
+    }
+
+    return hash
 }

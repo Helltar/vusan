@@ -3,6 +3,7 @@ package com.helltar.vusan.tools.images
 import com.helltar.vusan.request.PlatformLimits
 import com.helltar.vusan.common.extensionOfMime
 import com.helltar.vusan.common.limitTo
+import com.helltar.vusan.common.pictureHash
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sniffedImageMimeType
 import com.helltar.vusan.outbox.BotOutbox
@@ -20,6 +21,11 @@ private const val MAX_FILENAME_BASE_CHARS = 40
 // providers return dead links and hotlink-protected hosts, so candidates are worked through until enough
 // images survive.
 private const val ATTEMPTS_PER_IMAGE = 4
+
+// how many of a picture hash's 64 bits two encodings of one photo may differ in: a scene re-encoded as jpeg
+// moved 5, two scenes 25, and the copies one news page or wikipedia article links at other widths all fell
+// within it (2026-11-22)
+private const val LOOKALIKE_BITS = 8
 
 private val log = KotlinLogging.logger("ImageSearch")
 
@@ -42,8 +48,9 @@ data class FoundImage(val url: String, val description: String? = null)
 /**
  * Downloads [candidates] in order, keeps up to [limit] the chat can show as photos on the turn's shelf,
  * queues them as one photo or a media group unless [send] is off, under a spoiler when [spoiler] is on, and
- * returns the text reported to the model. [minShortSide] skips a candidate whose shorter side is smaller, for
- * a provider whose candidates include a page's icons and thumbnails.
+ * returns the text reported to the model. [minShortSide] skips a candidate whose shorter side is smaller, and
+ * [skipLookalikes] one that is a picture already kept at another size or quality, for candidates taken from
+ * pages, which carry icons and thumbnails and link one photo several times.
  * A chat refusing photos is answered before the first download when they are to be sent.
  */
 suspend fun ImageDownloadClient.deliverImageResults(
@@ -54,6 +61,7 @@ suspend fun ImageDownloadClient.deliverImageResults(
     send: Boolean = true,
     spoiler: Boolean = false,
     minShortSide: Int = 0,
+    skipLookalikes: Boolean = false,
 ): String {
     if (send) outbox.photosRefusedReply()?.let { return it }
 
@@ -63,6 +71,7 @@ suspend fun ImageDownloadClient.deliverImageResults(
     }
 
     val delivered = mutableListOf<Pair<BotOutput.Photo, String?>>()
+    val keptHashes = mutableListOf<Long>()
     var attempts = 0
 
     for (candidate in candidates) {
@@ -77,6 +86,17 @@ suspend fun ImageDownloadClient.deliverImageResults(
                     log.warn(error) { "image download error query=[$query] url=[${candidate.url}]" }
                 }
                 .getOrNull() ?: continue
+
+        if (skipLookalikes) {
+            val hash = pictureHash(bytes)
+
+            if (hash != null && keptHashes.any { (it xor hash).countOneBits() <= LOOKALIKE_BITS }) {
+                log.info { "skipping a picture already kept at another size query=[$query] url=[${candidate.url}]" }
+                continue
+            }
+
+            hash?.let { keptHashes += it }
+        }
 
         val filename = imageFilename(query, delivered.size, bytes)
 

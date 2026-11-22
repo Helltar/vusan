@@ -63,6 +63,7 @@ private val TOOL_ACTIVITIES: Map<String, ToolActivity> = buildMap {
     put(YouTubeTranscriptTools::readYouTubeTranscript.name, ToolActivity.READING_TRANSCRIPT)
     put(GroupLogTools::readGroupLog.name, ToolActivity.READING_CHAT_LOG)
     put(TavilyTools::searchImages.name, ToolActivity.SEARCHING_IMAGES)
+    put(PageTools::pageImages.name, ToolActivity.SEARCHING_IMAGES)
     put(GiphyTools::searchGifs.name, ToolActivity.SEARCHING_GIF)
     put(KlipyTools::searchGifs.name, ToolActivity.SEARCHING_GIF)
     put(ImageGenTools::generateImage.name, ToolActivity.DRAWING)

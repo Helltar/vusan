@@ -10,7 +10,9 @@ import com.helltar.vusan.tools.ToolSet
 import com.helltar.vusan.tools.images.FoundImage
 import com.helltar.vusan.tools.images.ImageDownloadClient
 import com.helltar.vusan.tools.images.MAX_IMAGE_RESULTS
+import com.helltar.vusan.tools.images.MIN_PAGE_PHOTO_SIDE
 import com.helltar.vusan.tools.images.deliverImageResults
+import com.helltar.vusan.tools.images.pagePhotoCandidates
 import com.helltar.vusan.tools.images.photosRefusedReply
 import com.helltar.vusan.tools.suspendToolGuard
 import kotlin.time.Clock
@@ -96,14 +98,19 @@ class ExaTools(
 
         val response = client.searchImages(query, numResults = IMAGE_PAGES, imagesPerPage = IMAGES_PER_PAGE)
 
+        // a preview is the picture a page chose to stand for it, so every page's goes before any image inside one
+        val previews = response.results.mapNotNull { it.image }
+        val inPages = response.results.flatMap { it.extras?.imageLinks.orEmpty() }
+
         imageDownloader.deliverImageResults(
             query = query,
-            candidates = imageCandidates(response.results).map { FoundImage(url = it) },
+            candidates = pagePhotoCandidates(previews + inPages).map { FoundImage(url = it) },
             limit = maxResults.coerceIn(1, MAX_IMAGE_RESULTS),
             outbox = outbox,
             send = send,
             spoiler = spoiler,
-            minShortSide = MIN_IMAGE_SIDE,
+            minShortSide = MIN_PAGE_PHOTO_SIDE,
+            skipLookalikes = true,
         )
     }
 
@@ -154,39 +161,8 @@ class ExaTools(
         const val IMAGE_PAGES = 10
         const val IMAGES_PER_PAGE = 5
 
-        // a page's images include its license badges, icons and 120px thumbnails of the picture itself
-        const val MIN_IMAGE_SIDE = 200
-
         val allowedCategories = setOf("news", "publication", "company", "people")
         val undatedCategories = setOf("company", "people")
         val timeRanges: Map<String, Duration> = mapOf("day" to 1.days, "week" to 7.days, "month" to 30.days, "year" to 365.days)
     }
 }
-
-/**
- * The image URLs worth downloading, best first: every page's own preview picture in rank order, then the
- * images inside the pages. A preview is the picture a page chose to stand for it, so it is the likeliest
- * match. The same picture is often linked twice with a different query string, so the address without one
- * decides duplicates.
- */
-private fun imageCandidates(results: List<ExaResult>): List<String> {
-    val previews = results.mapNotNull { it.image }
-    val inPages = results.flatMap { it.extras?.imageLinks.orEmpty() }
-
-    return (previews + inPages)
-        .map { it.trim() }
-        .filter { it.startsWith("https://") || it.startsWith("http://") }
-        .filterNot { it.isPageDecoration() }
-        .distinctBy { it.substringBefore('?') }
-}
-
-private fun String.isPageDecoration(): Boolean {
-    val path = substringBefore('?').lowercase()
-    val name = path.substringAfterLast('/')
-
-    return ".svg" in path || ignoredImageNames.any { it in name }
-}
-
-// what a page shows besides its pictures; a `.svg` is a drawing, and a wikimedia thumbnail of one ends in
-// `.svg.png`
-private val ignoredImageNames = listOf("logo", "icon", "favicon", "sprite", "avatar", "badge")
