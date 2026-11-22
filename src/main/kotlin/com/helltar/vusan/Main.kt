@@ -12,6 +12,7 @@ import com.helltar.vusan.agent.addressing.LlmAddressingClassifier
 import com.helltar.vusan.agent.conversation.ConversationRepository
 import com.helltar.vusan.agent.conversation.LlmConversationCompactor
 import com.helltar.vusan.agent.grouplog.GroupLogRepository
+import com.helltar.vusan.common.workingImageCodecs
 import com.helltar.vusan.agent.memory.MemoryRepository
 import com.helltar.vusan.agent.presence.Diary
 import com.helltar.vusan.agent.presence.DiaryRepository
@@ -506,6 +507,13 @@ private fun logStartup(
 
         else -> log.info { "Self-portrait: off — nothing draws or films it" }
     }
+
+    // a runtime can carry imageio without its native jpeg codec, and then every picture fails to be measured or
+    // re-encoded without a word
+    val codecs = workingImageCodecs()
+    val codecLine = "Image codecs: " + codecs.entries.joinToString(" ") { (format, works) -> "$format=[${if (works) "on" else "off"}]" }
+
+    if (codecs.values.all { it }) log.info { codecLine } else log.warn { "$codecLine — pictures in those formats are neither measured, compared nor re-encoded" }
 
     log.info { config.openAiStt?.let { "Voice input: model=[${it.model}]" } ?: "Voice input: off (OPENAI_STT_API_KEY not set)" }
 

@@ -1,8 +1,10 @@
 package com.helltar.vusan.telegram.delivery
 
 import com.helltar.vusan.common.escapeHtml
+import com.helltar.vusan.common.imageDimensions
 import com.helltar.vusan.common.reencodedAsJpeg
 import com.helltar.vusan.common.rethrowIfCancellation
+import com.helltar.vusan.common.sniffedImageMimeType
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.telegram.api
 import com.helltar.vusan.telegram.callback.inlineChoiceKeyboard
@@ -269,7 +271,20 @@ internal object TelegramOutputSender {
                 runCatching { sendAs(photo.bytes.asInputFile(photo.filename)) }
                     .recoverCatching { e ->
                         e.rethrowIfCancellation()
-                        val jpeg = reencodedAsJpeg(photo.bytes)?.takeIf { e.isImageProcessFailed() } ?: throw e
+                        if (!e.isImageProcessFailed()) throw e
+
+                        val jpeg = reencodedAsJpeg(photo.bytes)
+
+                        if (jpeg == null) {
+                            val size = imageDimensions(photo.bytes)?.let { (w, h) -> "${w}x$h" }
+
+                            log.warn {
+                                "sendPhoto could not process the image for chat=${target.chatId}, and it could not be re-encoded " +
+                                    "format=[${sniffedImageMimeType(photo.bytes)}] size=[$size] bytes=[${photo.bytes.size}]"
+                            }
+
+                            throw e
+                        }
 
                         log.warn { "sendPhoto could not process the image for chat=${target.chatId}, retrying it as a jpeg" }
                         sendAs(jpeg.asInputFile(photo.filename.substringBeforeLast('.') + ".jpg"))

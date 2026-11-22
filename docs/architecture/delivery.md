@@ -84,9 +84,11 @@ Before it: [running a turn](turn.md).
       rejected photo or video arrives uncovered. Text hides a part of itself with `<tg-spoiler>`.
     - **A photo Telegram cannot process** — `IMAGE_PROCESS_FAILED` (`TelegramErrors.isImageProcessFailed`) comes back
       for valid images inside every documented limit too, so before degrading to a document `TelegramOutputSender`
-      sends the same pixels once more as a plain RGB JPEG (`common/Images.kt`, `reencodedAsJpeg`). Only when that is
-      refused as well, or the image is too large to decode safely, does the photo go out as a document, carrying
-      the original file.
+      sends the same pixels once more as a plain RGB JPEG (`common/Images.kt`, `reencodedAsJpeg`), no longer on its
+      long side than the 2560 pixels Telegram shows a photo at. Only when that is refused as well, or the image
+      cannot be decoded at all, does the photo go out as a document, carrying the original file; the log line
+      then names its format and size. The JPEG codec is native and comes with Alpine's full `openjdk21-jre` alone,
+      so the startup summary's `Image codecs:` line warns when a runtime lacks it.
     - **A send that fails after every fallback** — the kind's own fallbacks and the text-as-document one have all
       been tried by then, so `TelegramDelivery` treats the item as not sent: no transcript row is written for it, and a
       comment that was to ride on it as a caption goes out as a message of its own, since the words are the answer and

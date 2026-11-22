@@ -144,8 +144,8 @@ private fun imageUrlsOf(document: Document): List<String> {
     document.select(BOILERPLATE_TAGS).remove()
     document.select(HIDDEN_ELEMENTS).remove()
     val root = document.selectFirst(CONTENT_ROOTS) ?: document.body() ?: document
-    // a `picture`'s `source` offers the same photo in other formats, often webp, which is not decoded here to
-    // tell copies apart; its `img` is the fallback every browser takes
+    // a `picture`'s `source` offers the same photo again in other formats; its `img` is the fallback every
+    // browser takes, and one copy is enough
     val inContent = root.select("img").mapNotNull { it.pictureUrl() }
 
     return (previews + inContent).filter { it.isNotEmpty() }.distinct().take(MAX_IMAGE_URLS)

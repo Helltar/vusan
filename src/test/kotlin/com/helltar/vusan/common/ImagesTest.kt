@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
+import java.util.Base64
 import javax.imageio.ImageIO
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -59,5 +60,36 @@ class ImagesTest {
     @Test
     fun `bytes that are no image have no picture hash`() {
         assertNull(pictureHash("not an image".toByteArray()))
+    }
+
+    @Test
+    fun `an image longer than telegram shows a photo is re-encoded at its size`() {
+        val jpeg = assertNotNull(reencodedAsJpeg(testPicture(5200, 2600, scene = 1)))
+        val (width, height) = assertNotNull(imageDimensions(jpeg))
+
+        assertTrue(width in 1_700..2_560, "width=$width")
+        assertEquals(width / 2, height, "the proportions stay")
+    }
+
+    @Test
+    fun `a webp picture is read, measured, hashed and re-encoded`() {
+        val webp = Base64.getDecoder().decode(TINY_WEBP)
+
+        assertEquals(64 to 48, imageDimensions(webp))
+        assertNotNull(pictureHash(webp))
+        assertEquals(64 to 48, imageDimensions(assertNotNull(reencodedAsJpeg(webp))))
+    }
+
+    @Test
+    fun `this runtime reads and writes jpeg and reads webp`() {
+        assertEquals(mapOf("jpeg" to true, "webp" to true), workingImageCodecs())
+    }
+
+    private companion object {
+        // 64x48, lossy vp8, made with imagemagick
+        const val TINY_WEBP =
+            "UklGRu4AAABXRUJQVlA4IOIAAADwCACdASpAADAAPm0qkEWkIq2WptjYBsS0AF8d4XyX8gOcy314AMsE/c7aOJ2vAACURJnTxblrK+9kE6CYzeiF" +
+                "AiRkfwWuHriW7xcipZNygAD+8puAT93jhW/yU7Qqn//CM/wjP6+i4SIOC9mDths1VuTSp0OoZyNEkO7IBRuFErhNDq9AVzmPExGe48NEXvBG" +
+                "bj6EGzCGl6ojR83w6Uo7RIy9GYpZEwkMWWJ32HZb4WpRLbOzNUXd/9TkyxAcSBWZ+yF8GiuQRVNGHMjNgm+7LeD4msPTfGbyMNuNKmJAAAAA"
     }
 }
