@@ -103,6 +103,19 @@ class RichMessageTextTest {
     }
 
     @Test
+    fun `keeps the address written in a ton_address span`() {
+        val message =
+            richMessage(
+                """
+                {"type":"paragraph","text":["Pay to ",
+                  {"type":"ton_address","text":"EQexample","address":"EQexample"},"."]}
+                """.trimIndent(),
+            )
+
+        assertEquals("Pay to EQexample.", message.richMessage.toRichMarkdown())
+    }
+
+    @Test
     fun `renders a table with its header separator and caption`() {
         val message =
             richMessage(

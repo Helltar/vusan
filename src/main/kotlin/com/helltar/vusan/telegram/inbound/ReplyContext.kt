@@ -26,9 +26,13 @@ private const val MAX_AUTHOR_CHARS = 160
 
 // the part of the replied message the sender selected, often the whole point ("what is this?" about one term
 // in a long answer). it matters for replies to the bot too: the message is in history, but which piece the
-// user pointed at is not.
+// user pointed at is not. a quote chosen from a rich message may leave `text` empty and carry its words only
+// as rich texts.
 internal fun Message.quotedFragmentOrNull(): String? =
-    quote?.text?.collapseWhitespaceAndCap(MAX_QUOTED_FRAGMENT_CHARS)?.takeIf { it.isNotBlank() }
+    quote
+        ?.let { it.text?.takeIf(String::isNotBlank) ?: it.richTexts?.toRichMarkdown() }
+        ?.collapseWhitespaceAndCap(MAX_QUOTED_FRAGMENT_CHARS)
+        ?.takeIf { it.isNotBlank() }
 
 internal suspend fun Message.replySummaryOrNull(
     client: TelegramClient,

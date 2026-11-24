@@ -47,6 +47,20 @@ class ReplyContextTest {
         assertNull(withoutQuote.quotedFragmentOrNull())
     }
 
+    @Test
+    fun `a quote chosen from a rich message is read from its rich texts`() {
+        val message =
+            message(
+                """
+                "text": "what is this",
+                "quote": {"text": "", "rich_texts": [["the ", {"type": "bold", "text": "second"}, " stage"], "next line"],
+                          "position": 12, "is_manual": true}
+                """,
+            )
+
+        assertEquals("the **second** stage next line", message.quotedFragmentOrNull())
+    }
+
     // history is keyed by user and chat, so a reply to something the bot wrote for someone else reaches a
     // history that never saw it; the block is all there is.
     @Test

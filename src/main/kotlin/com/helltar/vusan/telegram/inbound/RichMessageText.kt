@@ -9,6 +9,11 @@ private const val MAX_HEADING_SIZE = 6
 // agent writes for `sendRichMessage`, so it reads to the model like one it would produce.
 internal fun RichMessage.toRichMarkdown(): String = blocks.renderBlocks()
 
+// a quote chosen from a rich message holds one rich text per quotable text it spans, which telegram joins with
+// line feeds when it counts the quote's position.
+internal fun List<RichText?>.toRichMarkdown(): String =
+    mapNotNull { it?.render()?.takeIf(String::isNotBlank) }.joinToString("\n")
+
 // unknown block and rich text types deserialize to null (the bot api keeps adding them), and empty blocks
 // would only add blank lines.
 private fun List<RichBlock?>?.renderBlocks(): String =
@@ -109,6 +114,7 @@ private fun RichText?.render(): String =
         is RichTextEmailAddress -> text.render()
         is RichTextPhoneNumber -> text.render()
         is RichTextBankCardNumber -> text.render()
+        is RichTextTonAddress -> text.render()
         is RichTextButton -> button.text.render()
         is RichTextAnchorLink -> text.render()
         is RichTextReference -> text.render()
