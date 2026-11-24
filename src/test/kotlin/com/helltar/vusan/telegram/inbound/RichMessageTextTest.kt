@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import java.lang.reflect.Proxy
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,7 +15,7 @@ private val BOT_USERNAMES = listOf("VusanAgent", "VusanBot")
 
 class RichMessageTextTest {
 
-    private val mapper = ObjectMapper()
+    private val mapper = JsonMapper()
 
     // the replied message has no audio, so the summary must never call the api.
     private val unusedClient =

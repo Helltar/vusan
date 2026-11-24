@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import java.time.Instant
 import com.helltar.vusan.request.testChat
 import kotlin.test.Test
@@ -14,7 +14,7 @@ import org.telegram.telegrambots.meta.api.objects.polls.PollAnswer
 
 class GroupLogEntriesTest {
 
-    private val mapper = ObjectMapper()
+    private val mapper = JsonMapper()
 
     private val quiz = SentPoll(chatId = -100L, options = listOf("Lviv", "Kyiv"), correctOptionIndex = 1)
 

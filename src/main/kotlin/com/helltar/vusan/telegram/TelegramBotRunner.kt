@@ -73,7 +73,7 @@ import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.api.objects.polls.PollAnswer
 import org.telegram.telegrambots.meta.generics.TelegramClient
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import java.time.Instant
 import java.util.concurrent.Executors
 import kotlin.time.Duration
@@ -147,7 +147,7 @@ internal class TelegramBotRunner(
         // that a timed-out poll plus the wait beats the heartbeat's staleness limit.
         val longPolling =
             TelegramBotsLongPollingApplication(
-                ::ObjectMapper,
+                ::JsonMapper,
                 TelegramOkHttpClientFactory.DefaultOkHttpClientCreator(),
                 Executors::newSingleThreadScheduledExecutor,
             ) {

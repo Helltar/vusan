@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import com.helltar.vusan.i18n.Language
 import com.helltar.vusan.request.ChatCapabilities
 import com.helltar.vusan.request.ChatProfile
@@ -17,7 +17,7 @@ import org.telegram.telegrambots.meta.api.objects.stickers.Sticker
 
 class MessageMetadataTest {
 
-    private val mapper = ObjectMapper()
+    private val mapper = JsonMapper()
 
     @Test
     fun `each chat flavor gets its own prompt label`() {

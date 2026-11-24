@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import java.time.Instant
 import kotlin.test.Test
@@ -10,7 +10,7 @@ import kotlin.time.Duration.Companion.minutes
 
 class TelegramBotRunnerTest {
 
-    private val mapper = ObjectMapper()
+    private val mapper = JsonMapper()
 
     private val now: Instant = Instant.parse("2026-08-28T12:00:00Z")
 

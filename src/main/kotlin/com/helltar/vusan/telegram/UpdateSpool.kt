@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.infra.Db.dbTransaction
 import com.helltar.vusan.infra.tables.TelegramPendingUpdatesTable
@@ -31,7 +31,7 @@ internal class UpdateSpool(private val retention: Duration) {
 
     // the library's mapper settings live on the classes (`@Jacksonized`, NON_NULL, unknown properties
     // ignored), so a default mapper reproduces the Bot API wire format.
-    private val mapper = ObjectMapper()
+    private val mapper = JsonMapper()
 
     /** Persists a polled batch, best-effort: losing durability beats not answering now. */
     suspend fun record(updates: List<Update>) {

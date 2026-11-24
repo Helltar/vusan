@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram.delivery
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -16,8 +16,8 @@ import org.telegram.telegrambots.meta.api.objects.richtext.RichTextPlain
 // side, and an unparsable update stalls getUpdates forever, so both directions are pinned here.
 class RichMessageTest {
 
-    // the okhttp client serializes methods and parses responses with a default ObjectMapper.
-    private val mapper = ObjectMapper()
+    // the okhttp client serializes methods and parses responses with a default JsonMapper.
+    private val mapper = JsonMapper()
 
     @Test
     fun `serializes to the sendRichMessage wire format`() {
@@ -25,9 +25,9 @@ class RichMessageTest {
 
         val json = mapper.readTree(mapper.writeValueAsString(method))
 
-        assertEquals("sendRichMessage", json["method"].asText())
-        assertEquals("42", json["chat_id"].asText())
-        assertEquals("# Title\n\n- one", json["rich_message"]["markdown"].asText())
+        assertEquals("sendRichMessage", json["method"].asString())
+        assertEquals("42", json["chat_id"].asString())
+        assertEquals("# Title\n\n- one", json["rich_message"]["markdown"].asString())
         assertEquals(7, json["reply_parameters"]["message_id"].asInt())
     }
 
@@ -37,7 +37,7 @@ class RichMessageTest {
     fun `sends only the markdown field and omits absent optionals`() {
         val json = mapper.readTree(mapper.writeValueAsString(richMessageRequest(ChatTarget(42), "hi", null)))
 
-        assertEquals(setOf("markdown"), json["rich_message"].fieldNames().asSequence().toSet())
+        assertEquals(setOf("markdown"), json["rich_message"].propertyNames().toSet())
         assertFalse(json.has("reply_parameters"))
     }
 

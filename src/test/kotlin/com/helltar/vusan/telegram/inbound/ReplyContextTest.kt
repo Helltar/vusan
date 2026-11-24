@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import com.helltar.vusan.agent.attachedFileContextBlock
 import com.helltar.vusan.agent.formatAgentInput
 import com.helltar.vusan.request.AttachedFileKind
@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 
 class ReplyContextTest {
 
-    private val mapper = ObjectMapper()
+    private val mapper = JsonMapper()
 
     // attachments capture only file ids; nothing downloads until a tool asks for bytes.
     private val unusedClient: TelegramClient =

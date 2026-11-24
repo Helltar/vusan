@@ -1,6 +1,6 @@
 package com.helltar.vusan.telegram.inbound
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.databind.json.JsonMapper
 import com.helltar.vusan.request.testChat
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import kotlin.test.Test
@@ -115,7 +115,7 @@ class AmbientCandidatesTest {
         )
 
     private companion object {
-        val mapper = ObjectMapper()
+        val mapper = JsonMapper()
         const val PHOTO = """{"file_id": "p1", "file_unique_id": "u1", "width": 10, "height": 10}"""
     }
 }
