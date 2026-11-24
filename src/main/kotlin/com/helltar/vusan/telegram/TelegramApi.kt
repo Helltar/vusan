@@ -17,6 +17,8 @@ import kotlin.io.path.readBytes
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import org.telegram.telegrambots.meta.api.methods.GetFile
+import org.telegram.telegrambots.meta.api.methods.send.CallbackReplyMethod
+import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
 // the async surface: await() suspends without holding a thread and surfaces cancellation as
@@ -24,6 +26,12 @@ import org.telegram.telegrambots.meta.generics.TelegramClient
 // from rethrowIfCancellation.
 internal suspend fun <T> TelegramClient.api(block: TelegramClient.() -> CompletableFuture<T>): T =
     block().await()
+
+// a send method that may answer a button press with no receiver comes back as a message or as a bare success.
+// nothing here sends that callback-only form, and the client refuses a bare success it did not ask for, so
+// the message is always there.
+internal suspend fun TelegramClient.send(method: CallbackReplyMethod): Message =
+    checkNotNull(api { executeWithResultAsync(method) }.message) { "${method.javaClass.simpleName} returned no message" }
 
 private val log = KotlinLogging.logger("TelegramApi")
 

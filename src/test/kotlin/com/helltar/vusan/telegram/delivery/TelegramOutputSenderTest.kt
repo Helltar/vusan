@@ -1,6 +1,8 @@
 package com.helltar.vusan.telegram.delivery
 
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.telegram.FAKE_CLIENT_CALLS
+import com.helltar.vusan.telegram.answering
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
 import java.io.Serializable
@@ -426,8 +428,8 @@ class TelegramOutputSenderTest {
                 TelegramClient::class.java.classLoader,
                 arrayOf(TelegramClient::class.java),
             ) { _, method, args ->
-                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
-                handle(args.single())
+                check(method.name in FAKE_CLIENT_CALLS) { "unexpected client call: ${method.name}" }
+                handle(args.single()).answering(method)
             } as TelegramClient
 
         // failures complete the future exceptionally, as the okhttp client reports telegram errors.

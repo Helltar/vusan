@@ -8,6 +8,7 @@ import com.helltar.vusan.common.sniffedImageMimeType
 import com.helltar.vusan.outbox.BotOutput
 import com.helltar.vusan.telegram.api
 import com.helltar.vusan.telegram.callback.inlineChoiceKeyboard
+import com.helltar.vusan.telegram.send
 import com.helltar.vusan.telegram.telegramMessageId
 import io.github.oshai.kotlinlogging.KotlinLogging
 import java.io.ByteArrayInputStream
@@ -131,9 +132,7 @@ internal object TelegramOutputSender {
         replyParameters: ReplyParameters?,
     ) {
         runCatching {
-            client.api {
-                executeAsync(richMessageRequest(target, markdown, replyParameters))
-            }
+            client.send(richMessageRequest(target, markdown, replyParameters))
         }.recoverCatching { e ->
             e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)
@@ -248,19 +247,17 @@ internal object TelegramOutputSender {
         val sendAs =
             suspend { file: InputFile ->
                 sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
-                    client.api<Message> {
-                        executeAsync(
-                            SendPhoto.builder()
-                                .chatId(target.chatId)
-                                .messageThreadId(target.messageThreadId)
-                                .photo(file)
-                                .hasSpoiler(photo.spoiler)
-                                .caption(text)
-                                .parseMode(parseMode)
-                                .replyParameters(replyParameters)
-                                .build(),
-                        )
-                    }
+                    client.send(
+                        SendPhoto.builder()
+                            .chatId(target.chatId)
+                            .messageThreadId(target.messageThreadId)
+                            .photo(file)
+                            .hasSpoiler(photo.spoiler)
+                            .caption(text)
+                            .parseMode(parseMode)
+                            .replyParameters(replyParameters)
+                            .build(),
+                    )
                 }
             }
 
@@ -413,21 +410,19 @@ internal object TelegramOutputSender {
             failureMessage = "sendAudio failed, falling back to text",
             send = {
                 sendWithCaptionHtmlFallback(client, target, fullCaption, replyParameters, formattingFileNotice) { text, parseMode ->
-                    client.api<Message> {
-                        executeAsync(
-                            SendAudio.builder()
-                                .chatId(target.chatId)
-                                .messageThreadId(target.messageThreadId)
-                                .audio(audio.bytes.asInputFile(audio.filename))
-                                .title(audio.title)
-                                .performer(audio.performer)
-                                .duration(audio.durationSeconds)
-                                .caption(text)
-                                .parseMode(parseMode)
-                                .replyParameters(replyParameters)
-                                .build(),
-                        )
-                    }
+                    client.send(
+                        SendAudio.builder()
+                            .chatId(target.chatId)
+                            .messageThreadId(target.messageThreadId)
+                            .audio(audio.bytes.asInputFile(audio.filename))
+                            .title(audio.title)
+                            .performer(audio.performer)
+                            .duration(audio.durationSeconds)
+                            .caption(text)
+                            .parseMode(parseMode)
+                            .replyParameters(replyParameters)
+                            .build(),
+                    )
                 }
             },
             onFallback = {
@@ -451,19 +446,17 @@ internal object TelegramOutputSender {
             failureMessage = "sendVoice failed, falling back to text",
             send = {
                 sendWithCaptionHtmlFallback(client, target, caption, replyParameters, formattingFileNotice) { text, parseMode ->
-                    client.api<Message> {
-                        executeAsync(
-                            SendVoice.builder()
-                                .chatId(target.chatId)
-                                .messageThreadId(target.messageThreadId)
-                                .voice(voice.bytes.asInputFile("voice.mp3"))
-                                .duration(voice.durationSeconds)
-                                .caption(text)
-                                .parseMode(parseMode)
-                                .replyParameters(replyParameters)
-                                .build(),
-                        )
-                    }
+                    client.send(
+                        SendVoice.builder()
+                            .chatId(target.chatId)
+                            .messageThreadId(target.messageThreadId)
+                            .voice(voice.bytes.asInputFile("voice.mp3"))
+                            .duration(voice.durationSeconds)
+                            .caption(text)
+                            .parseMode(parseMode)
+                            .replyParameters(replyParameters)
+                            .build(),
+                    )
                 }
             },
             onFallback = captionTextFallback(client, target, caption, replyParameters),
@@ -493,25 +486,23 @@ internal object TelegramOutputSender {
             onTextFallback = captionTextFallback(client, target, fullCaption, replyParameters),
             send = {
                 sendWithCaptionHtmlFallback(client, target, fullCaption, replyParameters, formattingFileNotice) { text, parseMode ->
-                    client.api<Message> {
-                        executeAsync(
-                            SendVideo.builder()
-                                .chatId(target.chatId)
-                                .messageThreadId(target.messageThreadId)
-                                .video(video.bytes.asInputFile(video.filename))
-                                .thumbnail(thumbnail?.asInputFile(VIDEO_THUMBNAIL_FILENAME))
-                                .cover(thumbnail?.asInputFile(VIDEO_COVER_FILENAME))
-                                .hasSpoiler(video.spoiler)
-                                .caption(text)
-                                .parseMode(parseMode)
-                                .duration(video.durationSeconds)
-                                .width(video.width)
-                                .height(video.height)
-                                .supportsStreaming(true)
-                                .replyParameters(replyParameters)
-                                .build(),
-                        )
-                    }
+                    client.send(
+                        SendVideo.builder()
+                            .chatId(target.chatId)
+                            .messageThreadId(target.messageThreadId)
+                            .video(video.bytes.asInputFile(video.filename))
+                            .thumbnail(thumbnail?.asInputFile(VIDEO_THUMBNAIL_FILENAME))
+                            .cover(thumbnail?.asInputFile(VIDEO_COVER_FILENAME))
+                            .hasSpoiler(video.spoiler)
+                            .caption(text)
+                            .parseMode(parseMode)
+                            .duration(video.durationSeconds)
+                            .width(video.width)
+                            .height(video.height)
+                            .supportsStreaming(true)
+                            .replyParameters(replyParameters)
+                            .build(),
+                    )
                 }
             },
         )
@@ -525,18 +516,16 @@ internal object TelegramOutputSender {
         formattingFileNotice: String,
     ) {
         runCatching {
-            client.api<Message> {
-                executeAsync(
-                    SendVideoNote.builder()
-                        .chatId(target.chatId)
-                        .messageThreadId(target.messageThreadId)
-                        .videoNote(videoNote.bytes.asInputFile(VIDEO_NOTE_FILENAME))
-                        .duration(videoNote.durationSeconds)
-                        .length(videoNote.size)
-                        .replyParameters(replyParameters)
-                        .build(),
-                )
-            }
+            client.send(
+                SendVideoNote.builder()
+                    .chatId(target.chatId)
+                    .messageThreadId(target.messageThreadId)
+                    .videoNote(videoNote.bytes.asInputFile(VIDEO_NOTE_FILENAME))
+                    .duration(videoNote.durationSeconds)
+                    .length(videoNote.size)
+                    .replyParameters(replyParameters)
+                    .build(),
+            )
         }.recoverCatching { e ->
             e.rethrowIfCancellation()
             rethrowIfReplyNotFound(e, replyParameters)

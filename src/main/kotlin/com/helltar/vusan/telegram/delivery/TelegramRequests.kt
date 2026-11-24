@@ -1,6 +1,7 @@
 package com.helltar.vusan.telegram.delivery
 
 import com.helltar.vusan.telegram.api
+import com.helltar.vusan.telegram.send
 
 import java.io.ByteArrayInputStream
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery
@@ -193,18 +194,16 @@ internal suspend fun sendDocumentFile(
     parseMode: String?,
     replyParameters: ReplyParameters?,
 ) {
-    client.api {
-        executeAsync(
-            SendDocument.builder()
-                .chatId(target.chatId)
-                .messageThreadId(target.messageThreadId)
-                .document(bytes.asInputFile(filename))
-                .caption(caption)
-                .parseMode(parseMode)
-                .replyParameters(replyParameters)
-                .build(),
-        )
-    }
+    client.send(
+        SendDocument.builder()
+            .chatId(target.chatId)
+            .messageThreadId(target.messageThreadId)
+            .document(bytes.asInputFile(filename))
+            .caption(caption)
+            .parseMode(parseMode)
+            .replyParameters(replyParameters)
+            .build(),
+    )
 }
 
 internal suspend fun sendAnimationFile(
@@ -216,19 +215,17 @@ internal suspend fun sendAnimationFile(
     replyParameters: ReplyParameters?,
     spoiler: Boolean,
 ) {
-    client.api {
-        executeAsync(
-            SendAnimation.builder()
-                .chatId(target.chatId)
-                .messageThreadId(target.messageThreadId)
-                .animation(animation)
-                .hasSpoiler(spoiler)
-                .caption(caption)
-                .parseMode(parseMode)
-                .replyParameters(replyParameters)
-                .build(),
-        )
-    }
+    client.send(
+        SendAnimation.builder()
+            .chatId(target.chatId)
+            .messageThreadId(target.messageThreadId)
+            .animation(animation)
+            .hasSpoiler(spoiler)
+            .caption(caption)
+            .parseMode(parseMode)
+            .replyParameters(replyParameters)
+            .build(),
+    )
 }
 
 // stickers are always resent by file_id, and the Bot API takes no caption on one.
@@ -238,16 +235,14 @@ internal suspend fun sendStickerFile(
     fileId: String,
     replyParameters: ReplyParameters?,
 ) {
-    client.api {
-        executeAsync(
-            SendSticker.builder()
-                .chatId(target.chatId)
-                .messageThreadId(target.messageThreadId)
-                .sticker(InputFile(fileId))
-                .replyParameters(replyParameters)
-                .build(),
-        )
-    }
+    client.send(
+        SendSticker.builder()
+            .chatId(target.chatId)
+            .messageThreadId(target.messageThreadId)
+            .sticker(InputFile(fileId))
+            .replyParameters(replyParameters)
+            .build(),
+    )
 }
 
 internal suspend fun sendMediaGroup(

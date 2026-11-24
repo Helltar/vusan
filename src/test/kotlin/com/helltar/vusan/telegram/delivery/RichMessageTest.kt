@@ -7,6 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import org.telegram.telegrambots.meta.api.methods.updates.GetUpdates
 import org.telegram.telegrambots.meta.api.objects.ReplyParameters
+import org.telegram.telegrambots.meta.api.objects.message.SendMessageResult
 import org.telegram.telegrambots.meta.api.objects.richblock.RichBlockParagraph
 import org.telegram.telegrambots.meta.api.objects.richtext.RichTextConcat
 import org.telegram.telegrambots.meta.api.objects.richtext.RichTextPlain
@@ -50,7 +51,9 @@ class RichMessageTest {
             "rich_message":{"blocks":[{"type":"paragraph","text":"hello"}]}}}
             """.trimIndent()
 
-        val message = richMessageRequest(ChatTarget(42), "hello", null).deserializeResponse(response)
+        // `send` reads the answer as a SendMessageResult, the way the okhttp client parses it.
+        val request = richMessageRequest(ChatTarget(42), "hello", null)
+        val message = assertNotNull(SendMessageResult.deserializeResponse(response, request).message)
 
         val paragraph = message.richMessage.blocks.single() as RichBlockParagraph
         assertEquals("hello", (paragraph.text as RichTextPlain).text)

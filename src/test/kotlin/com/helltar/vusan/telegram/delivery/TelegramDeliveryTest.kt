@@ -17,6 +17,8 @@ import com.helltar.vusan.delivery.Destination
 import com.helltar.vusan.delivery.TurnDelivery
 import com.helltar.vusan.request.testChat
 import com.helltar.vusan.request.testUser
+import com.helltar.vusan.telegram.FAKE_CLIENT_CALLS
+import com.helltar.vusan.telegram.answering
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -447,8 +449,8 @@ class TelegramDeliveryTest {
                 TelegramClient::class.java.classLoader,
                 arrayOf(TelegramClient::class.java),
             ) { _, method, args ->
-                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
-                handle(args.single())
+                check(method.name in FAKE_CLIENT_CALLS) { "unexpected client call: ${method.name}" }
+                handle(args.single()).answering(method)
             } as TelegramClient
 
         private fun handle(request: Any): CompletableFuture<Any> =
@@ -498,14 +500,14 @@ class TelegramDeliveryTest {
                 TelegramClient::class.java.classLoader,
                 arrayOf(TelegramClient::class.java),
             ) { _, method, args ->
-                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+                check(method.name in FAKE_CLIENT_CALLS) { "unexpected client call: ${method.name}" }
                 val request = args.single()
                 requests += request.javaClass.simpleName
 
                 if (request is SendVideo) {
                     CompletableFuture.failedFuture<Any>(SocketTimeoutException("timeout"))
                 } else {
-                    CompletableFuture.completedFuture<Any>(Message())
+                    CompletableFuture.completedFuture<Any>(Message()).answering(method)
                 }
             } as TelegramClient
     }
@@ -521,7 +523,7 @@ class TelegramDeliveryTest {
                 TelegramClient::class.java.classLoader,
                 arrayOf(TelegramClient::class.java),
             ) { _, method, args ->
-                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+                check(method.name in FAKE_CLIENT_CALLS) { "unexpected client call: ${method.name}" }
                 val request = args.single() as SendMessage
                 ephemeralAnchors += request.replyParameters?.ephemeralMessageId
                 receivers += request.ephemeralMessageParameters?.receiverUserId
@@ -553,8 +555,8 @@ class TelegramDeliveryTest {
                 TelegramClient::class.java.classLoader,
                 arrayOf(TelegramClient::class.java),
             ) { _, method, args ->
-                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
-                handle(args.single())
+                check(method.name in FAKE_CLIENT_CALLS) { "unexpected client call: ${method.name}" }
+                handle(args.single()).answering(method)
             } as TelegramClient
 
         private fun handle(request: Any): CompletableFuture<Any> =
@@ -590,7 +592,7 @@ class TelegramDeliveryTest {
                 TelegramClient::class.java.classLoader,
                 arrayOf(TelegramClient::class.java),
             ) { _, method, _ ->
-                check(method.name == "executeAsync") { "unexpected client call: ${method.name}" }
+                check(method.name in FAKE_CLIENT_CALLS) { "unexpected client call: ${method.name}" }
                 calls++
 
                 CompletableFuture.failedFuture<Any>(
