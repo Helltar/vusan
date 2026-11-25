@@ -72,6 +72,14 @@ internal object RussianMessages : Messages {
 
     override val sandboxTitle = "Твоя песочница"
 
+    override val ownViewPrompt = "Здесь я не могу ответить только тебе, так что нажми кнопку: увидишь это только ты."
+
+    override val ownTasksButton = "Мои задачи"
+
+    override val ownSandboxButton = "Моя песочница"
+
+    override val ownViewFailedAlert = "Не получилось показать — попробуй ещё раз."
+
     override val ephemeralChatReply = "Это видим только мы с тобой, а отвечаю я всем. Напиши мне обычным сообщением"
 
     override val taskRecurrenceOnce = "один раз"

@@ -3,6 +3,8 @@ package com.helltar.vusan.telegram
 import com.helltar.vusan.agent.AgentRunner
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Messages
+import com.helltar.vusan.telegram.callback.OwnView
+import com.helltar.vusan.telegram.callback.OwnViewHandler
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.delivery.chatTarget
@@ -37,6 +39,7 @@ internal class TelegramCommands(
     private val delivery: TelegramDelivery,
     private val agent: AgentRunner,
     private val taskMenu: TaskMenuHandler,
+    private val ownViews: OwnViewHandler,
     // null where no sandbox server is configured: `/sandbox` is then no command at all, and reaches the agent
     // as any other text
     private val sandbox: SandboxClient? = null,
@@ -77,7 +80,7 @@ internal class TelegramCommands(
 
         // in a group the menu is one person's business, so it is shown to them alone. a client that knows the
         // command is ephemeral sends it so; an older one sends a plain message, which only an administrator
-        // may answer privately, so the menu goes out in the open
+        // may answer privately, so the chat gets a button that shows each presser their own menu
         val forSenderOnly = !message.isPrivateChat
 
         // the menu goes straight to the bot api with no delivery fallback chain; without this a rejected send
@@ -106,15 +109,9 @@ internal class TelegramCommands(
         }.recoverCatching { error ->
             error.rethrowIfCancellation()
             if (!forSenderOnly || message.isEphemeral) throw error
-            log.info { "no ephemeral task menu in chat=${message.chatIdLong} for user=$userId: ${error.message}" }
+            log.info { "no ephemeral task menu in chat=${message.chatIdLong} for user=$userId, posting its button: ${error.message}" }
 
-            taskMenu.sendMenu(
-                target = message.chatTarget,
-                userId = userId,
-                replyParameters = replyParameters(message.messageIdLong),
-                chatIsPrivate = message.isPrivateChat,
-                messages = messages,
-            )
+            ownViews.sendPrompt(OwnView.TASKS, message.chatTarget, replyParameters(message.messageIdLong), messages)
         }.onFailure { error ->
             error.rethrowIfCancellation()
 
@@ -191,18 +188,19 @@ internal class TelegramCommands(
         }
 
         // in a group it is that person's business, as their tasks are: for their eyes where telegram allows
-        // it, and in the open for a client that sent the command plain to a bot that is no administrator
+        // it, and behind a button that shows each presser their own for a client that sent the command plain
+        // to a bot that is no administrator
         runCatching { delivery.sendForSenderOnly(message, text) }
+            .recoverCatching { error ->
+                error.rethrowIfCancellation()
+                if (message.isEphemeral) throw error
+
+                log.info { "no ephemeral /sandbox answer in chat=${message.chatIdLong} for user=${sender.id}, posting its button: ${error.message}" }
+                ownViews.sendPrompt(OwnView.SANDBOX, message.chatTarget, replyParameters(message.messageIdLong), messages)
+            }
             .onFailure { error ->
                 error.rethrowIfCancellation()
-
-                if (message.isEphemeral) {
-                    log.warn { "no answer to an ephemeral /sandbox in chat=${message.chatIdLong} user=${sender.id}: ${error.message}" }
-                    return
-                }
-
-                log.info { "no ephemeral /sandbox answer in chat=${message.chatIdLong} for user=${sender.id}: ${error.message}" }
-                delivery.sendReply(message, text)
+                log.warn { "no answer to /sandbox in chat=${message.chatIdLong} user=${sender.id}: ${error.message}" }
             }
     }
 

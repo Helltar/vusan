@@ -7,8 +7,7 @@ inline choices. Part of the [architecture index](../architecture.md).
   chats show all of that user's tasks; a task is marked only when it writes somewhere other than the chat showing the
   menu (`TaskDeliveryElsewhere`: privately, seen from its group; to its group, seen from the private chat). Groups
   show only their tasks created in that chat, as an ephemeral message for
-  the caller alone (the open menu when Telegram refuses one: a client that does not yet know the command is ephemeral
-  sends it plain, and only an administrator may answer a plain message for one person's eyes), whose buttons then edit
+  the caller alone, whose buttons then edit
   it through `editEphemeralMessageText` — `EditableMessage` in
   `delivery/TelegramRequests` is the address a callback carries, ephemeral or not. Callback data carries the menu
   owner, every action checks ownership and group scope, and Telegram is always sent an `answerCallbackQuery`. Since
@@ -18,7 +17,12 @@ inline choices. Part of the [architecture index](../architecture.md).
   answer (the menu, a `/clear` confirmation) must come within 15 seconds of the command; past that Telegram answers
   `REPLY_TO_INVALID` and the answer is sent once more without its anchor
   (`TelegramSendFallbacks.sendEphemeralWithAnchorFallback`), which reaches the person only when the bot is an
-  administrator. Every command logs a `command:` line with its `age`, which tells a late command from a broken send.
+  administrator. A client that does not yet know the command is ephemeral sends it plain, and only an administrator
+  may answer a plain message for one person's eyes; where that is refused, the chat gets a button instead
+  (`callback/OwnViewHandler.kt`, callback data `own:tasks`), which belongs to nobody: whoever presses it is shown their
+  own menu of that chat as the ephemeral reply to the press (`sendCallbackReply`, Bot API 10.4's `callback_query_id`
+  without a receiver), which needs no admin right, only an answer within the press's 15 seconds. A refused reply is
+  an alert. Every command logs a `command:` line with its `age`, which tells a late command from a broken send.
   Pause/resume edits the menu in place; cancel first renders a delete/back confirmation. Resuming an overdue recurring
   task advances it to the next future occurrence, while an overdue one-time task stays paused. The agent-callable
   `pauseTask` and `resumeTask` tools use the same repository operations and resume calculation, so plain-language
@@ -55,8 +59,8 @@ inline choices. Part of the [architecture index](../architecture.md).
   how long anything is kept. The server gets eight seconds, because an ephemeral answer is refused after fifteen: past
   that, or when it refuses, the answer is a canned apology rather than the server's sentence, which is written for the
   model. A site the server will not report (it publishes nothing) leaves the rest of the answer standing. In a group
-  the answer is for the caller alone, like the task menu, and goes out in the open only for a plain command the bot
-  may not answer privately. A sender that is no single person (an anonymous admin, a linked channel) has no sandbox
+  the answer is for the caller alone, like the task menu, and a plain command the bot may not answer privately gets
+  the same button (`own:sandbox`), whose press shows each presser their own sandbox. A sender that is no single person (an anonymous admin, a linked channel) has no sandbox
   and is told so. The command exists only where `REGOLITH_URL` is set: without it `/sandbox` is not recognized, not in
   the menu and not in the system prompt, and reaches the agent as any other text.
 - **Agent-created inline choices** — `askWithButtons` enqueues a plain-text question plus two to ten answer buttons.

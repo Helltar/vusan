@@ -17,6 +17,7 @@ import com.helltar.vusan.telegram.telegramUserId
 import com.helltar.vusan.telegram.delivery.answerCallbackQuery
 import com.helltar.vusan.telegram.delivery.editTextMessage
 import com.helltar.vusan.telegram.delivery.isMessageNotModified
+import com.helltar.vusan.telegram.delivery.sendCallbackReply
 import com.helltar.vusan.telegram.delivery.sendTextMessage
 import com.helltar.vusan.telegram.InterfaceIcons
 import com.helltar.vusan.telegram.InterfaceIcons.Icon
@@ -63,6 +64,13 @@ internal class TaskMenuHandler(
             replyMarkup = menu.keyboard,
             ephemeral = ephemeral,
         )
+    }
+
+    /** Shows [userId] their menu for group [chatId] as the ephemeral reply to their press [callbackQueryId]. */
+    suspend fun sendMenuAsCallbackReply(callbackQueryId: String, userId: Long, chatId: Long, messages: Messages) {
+        val menu = buildMenu(userId, chatId, chatIsPrivate = false, messages)
+
+        sendCallbackReply(client, callbackQueryId, menu.text, ParseMode.HTML, menu.keyboard)
     }
 
     suspend fun handleCallback(

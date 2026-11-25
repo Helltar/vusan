@@ -43,6 +43,9 @@ How they run:
   fires only while the group has access. If the owner has not opened a private chat with Vusan, the
   task pauses at its next run and the group is told once.
 - **`/tasks` in a group** — shows only the tasks its sender made in that chat, seen by them alone.
+  When an older app sends the command so that Vusan cannot answer just its sender, the chat gets a
+  button instead: whoever presses it sees their own tasks there, and nobody else does. `/sandbox`
+  works the same way.
 
 ## While it is busy
 

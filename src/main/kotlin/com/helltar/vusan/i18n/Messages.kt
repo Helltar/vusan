@@ -48,6 +48,15 @@ interface Messages {
     val sandboxTitle: String
 
     /**
+     * The open stand-in for a `/tasks` or `/sandbox` that telegram would not let the bot answer for one person
+     * in a group: a button that shows each presser their own.
+     */
+    val ownViewPrompt: String
+    val ownTasksButton: String
+    val ownSandboxButton: String
+    val ownViewFailedAlert: String
+
+    /**
      * A reply to one of the bot's ephemeral answers, visible to the two of them only: the bot answers in the
      * open.
      */

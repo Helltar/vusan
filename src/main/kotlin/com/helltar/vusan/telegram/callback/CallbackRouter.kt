@@ -22,6 +22,7 @@ internal class CallbackRouter(
     private val taskMenu: TaskMenuHandler,
     private val inlineChoices: InlineChoiceHandler,
     private val turnStop: TurnStopHandler,
+    private val ownViews: OwnViewHandler,
     private val turns: AgentTurns,
     private val accessPolicy: AccessPolicy,
 ) {
@@ -31,6 +32,7 @@ internal class CallbackRouter(
             taskMenu.handles(callback.data) -> routeTaskMenu(callback)
             inlineChoices.handles(callback.data) -> routeInlineChoice(callback)
             turnStop.handles(callback.data) -> routeTurnStop(callback)
+            ownViews.handles(callback.data) -> routeOwnView(callback)
             // callback data from a scheme this build no longer knows. telegram keeps the button spinning
             // until the query is answered, so answer anyway.
             else -> answerUnrecognized(callback)
@@ -128,6 +130,23 @@ internal class CallbackRouter(
             chatId = chatId,
             messages = messages,
         )
+    }
+
+    // whoever presses sees their own, so the button belongs to nobody; the allowlist still decides who may
+    private suspend fun routeOwnView(callback: CallbackQuery) {
+        val messages = Messages.forCode(callback.from?.languageCode)
+        val message = callback.message ?: return answerUnrecognized(callback)
+
+        val chatId = message.chatId
+        val user = callback.from
+
+        if (!isAllowed(chatId, user.id)) {
+            log.warn { "denied own-view callback (${accessPolicy.denialReason(telegramChat(chatId), telegramUser(user.id))}): chat=[$chatId] user=[${user.id}]" }
+            answerCallbackQuery(client, callback.id, messages.ownViewFailedAlert, showAlert = true)
+            return
+        }
+
+        ownViews.handleCallback(callback.id, callback.data, user, chatId, messages)
     }
 
     private suspend fun answerUnrecognized(callback: CallbackQuery) {

@@ -168,6 +168,30 @@ internal suspend fun setMessageReaction(client: TelegramClient, chatId: Long, me
     }
 }
 
+/**
+ * A message only the person who pressed a button sees, sent as the ephemeral reply to that press: no chat, no
+ * receiver and no admin right needed, in any chat but a channel's direct messages, within the 15 seconds
+ * telegram gives a press. It answers with a bare success, no message, and the press still needs its own answer.
+ */
+internal suspend fun sendCallbackReply(
+    client: TelegramClient,
+    callbackQueryId: String,
+    text: String,
+    parseMode: String?,
+    replyMarkup: InlineKeyboardMarkup? = null,
+) {
+    client.api {
+        executeWithResultAsync(
+            SendMessage.builder()
+                .text(text)
+                .parseMode(parseMode)
+                .replyMarkup(replyMarkup)
+                .ephemeralMessageParameters(EphemeralMessageParameters.builder().callbackQueryId(callbackQueryId).build())
+                .build(),
+        )
+    }
+}
+
 internal suspend fun answerCallbackQuery(
     client: TelegramClient,
     callbackQueryId: String,

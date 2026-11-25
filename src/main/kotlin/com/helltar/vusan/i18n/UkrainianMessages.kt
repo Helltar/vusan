@@ -72,6 +72,14 @@ internal object UkrainianMessages : Messages {
 
     override val sandboxTitle = "Твоя пісочниця"
 
+    override val ownViewPrompt = "Тут я не можу відповісти лише тобі, тож натисни кнопку: побачиш це тільки ти."
+
+    override val ownTasksButton = "Мої завдання"
+
+    override val ownSandboxButton = "Моя пісочниця"
+
+    override val ownViewFailedAlert = "Не вдалося показати — спробуй ще раз."
+
     override val ephemeralChatReply =
         "Це бачимо лише ми з тобою, а відповідаю я всім. Напиши мені звичайним повідомленням"
 

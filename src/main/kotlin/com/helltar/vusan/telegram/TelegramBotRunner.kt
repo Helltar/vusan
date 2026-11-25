@@ -23,6 +23,7 @@ import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.telegram.callback.CallbackRouter
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
+import com.helltar.vusan.telegram.callback.OwnViewHandler
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.callback.TurnStopHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
@@ -119,8 +120,9 @@ internal class TelegramBotRunner(
         AgentTurns(client, agent, delivery, inlineChoices, chatProfiles, voiceTranscriber, sandbox, fallbackInUse, icons)
 
     private val turnStop = TurnStopHandler(client, agent)
-    private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, turns, accessPolicy)
-    private val commands = TelegramCommands(delivery, agent, taskMenu, sandboxClient)
+    private val ownViews = OwnViewHandler(client, taskMenu, sandboxClient)
+    private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, ownViews, turns, accessPolicy)
+    private val commands = TelegramCommands(delivery, agent, taskMenu, ownViews, sandboxClient)
 
     private val answeredMessages = AnsweredMessages(ANSWERED_MEMORY)
 

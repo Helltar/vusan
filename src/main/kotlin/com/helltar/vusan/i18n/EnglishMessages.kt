@@ -71,6 +71,14 @@ internal object EnglishMessages : Messages {
 
     override val sandboxTitle = "Your sandbox"
 
+    override val ownViewPrompt = "I can't answer just you here, so press the button: only you will see what it shows."
+
+    override val ownTasksButton = "My tasks"
+
+    override val ownSandboxButton = "My sandbox"
+
+    override val ownViewFailedAlert = "Couldn't show it to you — try again."
+
     override val ephemeralChatReply =
         "Only the two of us can see this, and I answer in the open. Write me a regular message"
 
