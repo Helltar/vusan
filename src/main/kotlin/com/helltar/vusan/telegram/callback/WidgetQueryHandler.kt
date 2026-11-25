@@ -95,12 +95,14 @@ internal class WidgetQueryHandler(
         }
     }
 
-    // a message's own row first: a shared widget posted again keeps its own chat and caption there
+    // a press that names its message is that message's own row or nothing: the shared widget's first message
+    // may sit in another chat, whose chat state and caption are not this one's. only a forwarded copy, which
+    // names no message, is matched by the shared widget.
     private suspend fun find(query: WidgetPress): WidgetRecord? {
         val chat = query.chat
         val messageId = query.messageId
 
-        if (chat != null && messageId != null) registry.find(chat.id, messageId)?.let { return it }
+        if (chat != null && messageId != null) return registry.find(chat.id, messageId)
 
         return query.widgetId?.let { registry.origin(it) }
     }
@@ -118,7 +120,7 @@ internal class WidgetQueryHandler(
         val chat = query.chat
 
         // a forwarded copy has no chat to answer in, and a turn is paid for by the chat the widget lives in
-        if (chat == null || query.fromCopy) return answer(query, null)
+        if (chat == null || query.fromCopy || widget.chatId != chat.id) return answer(query, null)
 
         if (!accessPolicy.allows(telegramChat(chat.id), telegramUser(query.from.id))) {
             log.warn { "denied widget query: chat=[${chat.id}] user=[${query.from.id}]" }

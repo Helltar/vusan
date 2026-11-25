@@ -161,4 +161,16 @@ class WidgetQueryHandlerTest {
         assertEquals(listOf("answerWidgetQuery"), calls.map { it.method })
         assertTrue(registry.find(-100L, 7)?.publicData == null)
     }
+
+    // the shared widget's first message lives in another chat: its state and caption are not this chat's
+    @Test
+    fun `a press from a message the bot has no row for borrows no other chat's widget`() = runBlocking {
+        registry.remember(ChatTarget(-200L), SentWidget(3, widgetId = "88"), BotOutput.Widget("<p>board</p>", "Chess", WidgetRequests.AGENT, shared = true))
+
+        handler().handle(WidgetPress("q1", ann, "move:e4", fromWallet = false, chat = group, messageId = 7, widgetId = "88"))
+
+        assertEquals(listOf("answerWidgetQuery"), calls.map { it.method })
+        assertTrue(calls[0].body["data"] == null)
+        assertTrue(turns.isEmpty())
+    }
 }
