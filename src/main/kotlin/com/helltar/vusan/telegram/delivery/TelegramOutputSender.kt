@@ -6,6 +6,7 @@ import com.helltar.vusan.common.reencodedAsJpeg
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.common.sniffedImageMimeType
 import com.helltar.vusan.outbox.BotOutput
+import com.helltar.vusan.outbox.WidgetRequests
 import com.helltar.vusan.telegram.api
 import com.helltar.vusan.telegram.callback.inlineChoiceKeyboard
 import com.helltar.vusan.telegram.send
@@ -38,6 +39,7 @@ internal object TelegramOutputSender {
     private const val VIDEO_NOTE_FILENAME = "video-note.mp4"
     private const val VIDEO_THUMBNAIL_FILENAME = "thumbnail.jpg"
     private const val VIDEO_COVER_FILENAME = "cover.jpg"
+    private const val WIDGET_FALLBACK_FILENAME = "widget.html"
 
     private val log = KotlinLogging.logger {}
 
@@ -50,6 +52,8 @@ internal object TelegramOutputSender {
         formattingFileNotice: String,
         // the id of a poll telegram actually created, which a later `poll_answer` can be matched against.
         onPollSent: (suspend (String) -> Unit)? = null,
+        // a widget telegram actually created, which a later press inside it is matched against.
+        onWidgetSent: (suspend (SentWidget) -> Unit)? = null,
     ) {
         when (item) {
             is BotOutput.Text -> sendReplyText(client, target, item.text, replyParameters, formattingFileNotice)
@@ -69,8 +73,67 @@ internal object TelegramOutputSender {
             is BotOutput.Quiz -> sendQuiz(client, target, replyParameters, item, onPollSent)
             is BotOutput.Poll -> sendPoll(client, target, replyParameters, item, onPollSent)
             is BotOutput.Reaction -> sendReaction(client, target, item)
+            is BotOutput.Widget -> sendWidgetOutput(client, target, replyParameters, item, formattingFileNotice, onWidgetSent)
+            is BotOutput.SharedWidget -> sendSharedWidgetOutput(client, target, replyParameters, item, onWidgetSent)
         }
     }
+
+    // a client or chat refusing the widget still gets what it was: the page as a file, which opens in a
+    // browser, and failing that the caption.
+    private suspend fun sendWidgetOutput(
+        client: TelegramClient,
+        target: ChatTarget,
+        replyParameters: ReplyParameters?,
+        widget: BotOutput.Widget,
+        formattingFileNotice: String,
+        onWidgetSent: (suspend (SentWidget) -> Unit)?,
+    ) = sendMediaWithDocumentFallback(
+        client = client,
+        target = target,
+        replyParameters = replyParameters,
+        mediaLabel = "sendWidget",
+        bytes = widget.html.toByteArray(),
+        filename = WIDGET_FALLBACK_FILENAME,
+        caption = widget.caption.escapeHtml(),
+        formattingFileNotice = formattingFileNotice,
+        send = {
+            val sent =
+                sendWidget(
+                    client = client,
+                    target = target,
+                    html = widget.html,
+                    caption = widget.caption,
+                    width = widget.width,
+                    height = widget.height,
+                    chatData = widget.chatData,
+                    publicData = widget.publicData,
+                    allowQueries = widget.requests != WidgetRequests.NONE,
+                    shared = widget.shared,
+                    replyParameters = replyParameters,
+                )
+
+            onWidgetSent?.invoke(sent)
+        },
+        onTextFallback = captionTextFallback(client, target, widget.caption.escapeHtml(), replyParameters),
+    )
+
+    private suspend fun sendSharedWidgetOutput(
+        client: TelegramClient,
+        target: ChatTarget,
+        replyParameters: ReplyParameters?,
+        widget: BotOutput.SharedWidget,
+        onWidgetSent: (suspend (SentWidget) -> Unit)?,
+    ) = sendOrFallback(
+        target = target,
+        replyParameters = replyParameters,
+        failureMessage = "sendSharedWidget failed, falling back to its caption",
+        send = {
+            val sent = sendSharedWidget(client, target, widget.widgetId, widget.caption, widget.chatData, replyParameters)
+            // telegram may leave the id out of a message it already knows is shared
+            onWidgetSent?.invoke(sent.copy(widgetId = sent.widgetId ?: widget.widgetId))
+        },
+        onFallback = captionTextFallback(client, target, widget.caption.escapeHtml(), replyParameters),
+    )
 
     private suspend fun sendInlineChoice(
         client: TelegramClient,

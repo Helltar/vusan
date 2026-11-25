@@ -42,6 +42,7 @@ import com.helltar.vusan.tasks.TasksRepository
 import com.helltar.vusan.telegram.ChatProfiles
 import com.helltar.vusan.telegram.PollRegistry
 import com.helltar.vusan.telegram.InterfaceIcons
+import com.helltar.vusan.telegram.WidgetRegistry
 import com.helltar.vusan.telegram.TelegramBotRunner
 import com.helltar.vusan.telegram.addressingNames
 import com.helltar.vusan.telegram.botProfile
@@ -229,16 +230,21 @@ suspend fun main() = coroutineScope {
         // them into.
         val polls = groupLog?.let { PollRegistry() }
 
+        // what each widget the bot sent is for and shows: a press names only its message, and the bot api
+        // reads no state back
+        val widgets = WidgetRegistry()
+
         val delivery =
             TelegramDelivery(
                 telegramClient, stickerCatalog?.let { it::recheckSetOf }, groupLog, polls,
                 onStickerSent = stickerCatalog?.let { it::recordSent },
+                widgets = widgets,
             )
         val chatProfiles = ChatProfiles(telegramClient, botProfile.userId)
 
         val toolCatalogFactory =
             ToolCatalogFactory(
-                http, publicHttp, TelegramToolSets(telegramClient, delivery, chatProfiles, stickerCatalog, config.platformLimits), config,
+                http, publicHttp, TelegramToolSets(telegramClient, delivery, chatProfiles, widgets, stickerCatalog, config.platformLimits), config,
                 conversation, memory, tasks, leaveAlone, vision, groupLog, diaryRepository,
                 contextWindowPolicy.liveToolResultMaxChars, codexAuth, selfImage,
             )
@@ -311,6 +317,7 @@ suspend fun main() = coroutineScope {
                 groupLog, polls, fallbackInUse, ambient, sandboxClient = toolCatalogFactory.sandboxClient, floor = floor,
                 telegramUrl = telegramUrl,
                 icons = interfaceIcons,
+                widgets = widgets,
             )
 
         // retention runs on its own clock, since what most needs clearing is what nobody writes to. the steps
@@ -328,6 +335,7 @@ suspend fun main() = coroutineScope {
                     },
                     groupLog?.let { Maintenance.Step("group log retention") { it.pruneExpired(MAINTENANCE_BATCH) } },
                     polls?.let { Maintenance.Step("expired polls") { it.pruneExpired(Instant.now()) } },
+                    Maintenance.Step("expired widgets") { widgets.pruneExpired(Instant.now()) },
                     Maintenance.Step("leave-alone retention") { leaveAlone.pruneExpired(Instant.now()) },
                 ),
             )

@@ -14,6 +14,8 @@ import com.helltar.vusan.infra.tables.TelegramPollsTable
 import com.helltar.vusan.infra.tables.ScheduledTasksTable
 import com.helltar.vusan.infra.tables.TelegramStickerSetsTable
 import com.helltar.vusan.infra.tables.TelegramStickersTable
+import com.helltar.vusan.infra.tables.TelegramWidgetVotesTable
+import com.helltar.vusan.infra.tables.TelegramWidgetsTable
 import org.jetbrains.exposed.v1.core.Table
 
 /**
@@ -26,7 +28,7 @@ import org.jetbrains.exposed.v1.core.Table
 internal object Schema {
 
     /** Raise by one for every schema change, together with the step that reaches it. */
-    const val VERSION = 9
+    const val VERSION = 10
 
     /**
      * The steps between versions: the statements under `N` take a database from `N - 1` to `N`. Every step a
@@ -58,6 +60,17 @@ internal object Schema {
             9 to listOf(
                 "ALTER TABLE scheduled_tasks ADD COLUMN deliver_privately BOOLEAN DEFAULT 0 NOT NULL",
             ),
+            10 to listOf(
+                "CREATE TABLE telegram_widgets (chat_id BIGINT NOT NULL, message_id INT NOT NULL, thread_id INT NULL, " +
+                        "widget_id VARCHAR(64) NULL, requests VARCHAR(8) NOT NULL, caption TEXT NOT NULL, chat_data TEXT NULL, " +
+                        "public_data TEXT NULL, revision INT DEFAULT 0 NOT NULL, created_at TEXT NOT NULL, " +
+                        "CONSTRAINT pk_telegram_widgets PRIMARY KEY (chat_id, message_id))",
+                "CREATE INDEX telegram_widgets_widget_id ON telegram_widgets (widget_id)",
+                "CREATE INDEX telegram_widgets_created_at ON telegram_widgets (created_at)",
+                "CREATE TABLE telegram_widget_votes (chat_id BIGINT NOT NULL, message_id INT NOT NULL, " +
+                        "user_id BIGINT NOT NULL, choice VARCHAR(64) NOT NULL, " +
+                        "CONSTRAINT pk_telegram_widget_votes PRIMARY KEY (chat_id, message_id, user_id))",
+            ),
         )
 
     /** The oldest version [steps] can move forward; anything older was moved by hand. */
@@ -79,5 +92,7 @@ internal object Schema {
             TelegramChatStickersTable,
             TelegramPendingUpdatesTable,
             TelegramPollsTable,
+            TelegramWidgetsTable,
+            TelegramWidgetVotesTable,
         )
 }

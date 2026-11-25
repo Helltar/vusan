@@ -8,6 +8,7 @@ import com.helltar.vusan.agent.attachedFileContextBlock
 import com.helltar.vusan.agent.formatAgentInput
 import com.helltar.vusan.agent.formatConversationInput
 import com.helltar.vusan.agent.inlineChoiceInput
+import com.helltar.vusan.agent.widgetRequestInput
 import com.helltar.vusan.common.collapseWhitespaceAndCap
 import com.helltar.vusan.common.rethrowIfCancellation
 import com.helltar.vusan.i18n.Language
@@ -19,6 +20,7 @@ import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.InlineChoiceSelection
+import com.helltar.vusan.telegram.delivery.ChatTarget
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.inbound.VoiceTranscriber
 import com.helltar.vusan.telegram.inbound.canLoadChatDescription
@@ -33,11 +35,13 @@ import com.helltar.vusan.telegram.inbound.replyToMessageIdOrNull
 import com.helltar.vusan.telegram.inbound.toChatContext
 import com.helltar.vusan.telegram.inbound.toSenderContext
 import com.helltar.vusan.telegram.inbound.writtenAt
+import com.helltar.vusan.tools.ToolGroup
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import org.telegram.telegrambots.meta.api.objects.User
+import org.telegram.telegrambots.meta.api.objects.chat.Chat
 import org.telegram.telegrambots.meta.api.objects.message.Message
 import org.telegram.telegrambots.meta.generics.TelegramClient
 
@@ -187,6 +191,41 @@ internal class AgentTurns(
                 )
             },
             reply = { text -> delivery.sendReply(message, text, selection.originMessageId) },
+        )
+    }
+
+    /**
+     * A press inside an `agent` widget: a turn as [user], run as if from the widget's message, so the answer
+     * hangs under it and anything scheduled anchors to it.
+     */
+    suspend fun dispatchWidgetRequest(chat: Chat, user: User, widget: WidgetRecord, data: String) {
+        val input = widgetRequestInput(widget.messageId.toString(), widget.caption, data, widget.chatData, widget.publicData)
+        val target = ChatTarget(chat.id, widget.threadId)
+        val language = Language.fromCode(user.languageCode)
+        val profile = if (chat.isUserChat) ChatProfile.NONE else chatProfiles.of(chat.id)
+
+        val request =
+            AgentRequest(
+                context =
+                    RequestContext(
+                        platform = Platform.TELEGRAM,
+                        chat = chat.toChatContext(profile, widget.threadId),
+                        sender = user.toSenderContext(),
+                        messageId = widget.messageId.toString(),
+                        language = language,
+                    ),
+                prompt = input,
+                conversationEntry = input,
+                // the answer is a new state, which nothing outside the group can write
+                toolGroups = setOf(ToolGroup.WIDGETS),
+            )
+
+        runAgentTurn(
+            request = request,
+            inputKind = "widget request",
+            waitForTurn = true,
+            deliver = { result -> delivery.sendWidgetAnswer(result, target, widget.messageId, user.id, Messages.of(language)) },
+            reply = { text -> delivery.sendWidgetNotice(target, widget.messageId, text) },
         )
     }
 

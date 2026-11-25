@@ -89,6 +89,14 @@ Before it: [running a turn](turn.md).
       cannot be decoded at all, does the photo go out as a document, carrying the original file; the log line
       then names its format and size. The JPEG codec is native and comes with Alpine's full `openjdk21-jre` alone,
       so the startup summary's `Image codecs:` line warns when a runtime lacks it.
+    - **Widgets** — Bot API 10.4's HTML widgets (`BotOutput.Widget`, and `BotOutput.SharedWidget` posting a shared one
+      again) go out through `telegram/delivery/TelegramWidgetRequests.kt`. A widget telegram actually created is
+      written to `telegram_widgets` (`WidgetRegistry.remember`, through `onWidgetSent`), with its topic, purpose and
+      state, since a later press names only the message and the Bot API reads no state back. A refused widget is
+      resent as a `widget.html` document, and failing that as its caption. Telegram checks a widget like a photo, so a
+      chat refusing photos refuses widgets at the outbox; Bot API 10.4 takes a bot's widget in private chats only, so
+      from a group `sendWidget` refuses until the turn has switched to the person's private chat
+      (`replyInPrivateMessages`), and the widget is remembered there.
     - **A send that fails after every fallback** — the kind's own fallbacks and the text-as-document one have all
       been tried by then, so `TelegramDelivery` treats the item as not sent: no transcript row is written for it, and a
       comment that was to ride on it as a caption goes out as a message of its own, since the words are the answer and

@@ -243,11 +243,13 @@ class ToolCatalogFactory(
         // the shelf the turn runs its tools in, so references resolve against what they kept
         shelf: TurnShelf,
         narrator: TurnNarrator? = null,
+        // what the turn's input already calls for, on top of what the conversation loaded before
+        preload: Set<ToolGroup> = emptySet(),
     ): ToolCatalog {
         val chat = context.chat.capabilities
 
         return toolCatalog(
-            preloaded = loadedGroups.of(context.scope),
+            preloaded = loadedGroups.of(context.scope) + preload,
             onLoad = { groups -> loadedGroups.remember(context.scope, groups) },
         ) {
             tools(MessageTools(outbox, narrator))

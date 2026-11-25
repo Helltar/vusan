@@ -163,10 +163,57 @@ sealed class BotOutput {
         }
     }
 
+    /**
+     * An HTML widget drawn inside the message, with the state only the bot writes ([chatData] for this chat,
+     * [publicData] wherever it is shown) and what a press inside it does. [caption] is what a client without
+     * widgets shows instead, and the chat list. [shared] makes one shared state for every message showing it.
+     */
+    class Widget(
+        val html: String,
+        val caption: String,
+        val requests: WidgetRequests = WidgetRequests.NONE,
+        val shared: Boolean = false,
+        val chatData: String? = null,
+        val publicData: String? = null,
+        val width: Int = 0,
+        val height: Int = 0,
+    ) : BotOutput() {
+        init {
+            require(html.isNotBlank()) { "Widget html must not be blank" }
+            require(caption.isNotBlank()) { "Widget caption must not be blank" }
+            require(width >= 0 && height >= 0) { "Widget size anchors must not be negative" }
+        }
+    }
+
+    /** A shared widget sent again, by telegram's id for it: the same HTML and shared state, this chat's own state. */
+    data class SharedWidget(
+        val widgetId: String,
+        val caption: String,
+        val chatData: String? = null,
+    ) : BotOutput() {
+        init {
+            require(widgetId.isNotBlank()) { "Shared widget id must not be blank" }
+            require(caption.isNotBlank()) { "Shared widget caption must not be blank" }
+        }
+    }
+
     data class Reaction(val messageId: String, val emoji: String) : BotOutput() {
         init {
             require(messageId.isNotBlank()) { "Reaction message id must not be blank" }
             require(emoji.isNotBlank()) { "Reaction emoji must not be blank" }
         }
     }
+}
+
+/** What a press inside a widget does. */
+enum class WidgetRequests {
+
+    /** Nothing: the widget never asks the bot. */
+    NONE,
+
+    /** A press starts a turn of the agent, which answers by changing the widget's state. */
+    AGENT,
+
+    /** The bot keeps each person's latest choice and publishes the counts as the shared state, no turn involved. */
+    TALLY,
 }

@@ -30,6 +30,7 @@ import com.helltar.vusan.request.Platform
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.SenderContext
 import com.helltar.vusan.tasks.TasksRepository
+import com.helltar.vusan.telegram.WidgetRegistry
 import com.helltar.vusan.telegram.tools.TelegramToolSets
 import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
 import com.helltar.vusan.tools.ToolCatalogFactory
@@ -183,7 +184,7 @@ private fun catalogFactory(options: PromptExportOptions): ToolCatalogFactory {
         publicHttp = http,
         platformTools =
             TelegramToolSets(
-                telegram, refusingDelivery(), ChatProfiles(telegram, botId = 1),
+                telegram, refusingDelivery(), ChatProfiles(telegram, botId = 1), WidgetRegistry(),
                 StickerCatalog(telegram, ImageVisionClient(vision.client, vision.model, vision.options)),
             ),
         config = exportConfig(options),

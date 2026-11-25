@@ -26,6 +26,8 @@ import com.helltar.vusan.telegram.callback.InlineChoiceHandler
 import com.helltar.vusan.telegram.callback.OwnViewHandler
 import com.helltar.vusan.telegram.callback.TaskMenuHandler
 import com.helltar.vusan.telegram.callback.TurnStopHandler
+import com.helltar.vusan.telegram.callback.WidgetPress
+import com.helltar.vusan.telegram.callback.WidgetQueryHandler
 import com.helltar.vusan.telegram.delivery.TelegramDelivery
 import com.helltar.vusan.telegram.delivery.isTelegramUnavailable
 import com.helltar.vusan.telegram.inbound.AudioInput
@@ -108,6 +110,7 @@ internal class TelegramBotRunner(
     private val telegramUrl: TelegramUrl = TelegramUrl.DEFAULT_URL,
     // shared with the task menu, so what one status learns about custom emoji holds for every button
     private val icons: InterfaceIcons = InterfaceIcons(),
+    private val widgets: WidgetRegistry = WidgetRegistry(),
 ) {
 
     private val sandbox = sandboxClient != null
@@ -123,6 +126,7 @@ internal class TelegramBotRunner(
     private val ownViews = OwnViewHandler(client, taskMenu, sandboxClient)
     private val callbacks = CallbackRouter(client, taskMenu, inlineChoices, turnStop, ownViews, turns, accessPolicy)
     private val commands = TelegramCommands(delivery, agent, taskMenu, ownViews, sandboxClient)
+    private val widgetQueries = WidgetQueryHandler(client, widgets, accessPolicy, turns::dispatchWidgetRequest)
 
     private val answeredMessages = AnsweredMessages(ANSWERED_MEMORY)
 
@@ -259,6 +263,13 @@ internal class TelegramBotRunner(
             // settled here, album parts included: an interrupted turn is never replayed, and the spool only
             // carries work nobody started.
             spool.settle(update.updateId)
+
+            val widgetQuery = update.widgetQuery?.let(::WidgetPress) ?: update.sharedWidgetQuery?.let(::WidgetPress)
+
+            if (widgetQuery != null) {
+                launchWidgetQueryHandling(widgetQuery)
+                continue
+            }
 
             val pollAnswer = update.pollAnswer
 
@@ -427,6 +438,18 @@ internal class TelegramBotRunner(
                         "callback handling failed for data=[${callback.data}] chat=${callback.message?.chatId} " +
                                 "msg=${callback.message?.messageId} user=${callback.from?.id}"
                     }
+                }
+        }
+    }
+
+    // telegram shows the widget a timeout after 15 seconds without an answer, so a press never waits behind
+    // the update loop.
+    private fun CoroutineScope.launchWidgetQueryHandling(query: WidgetPress) {
+        launch {
+            runCatching { widgetQueries.handle(query) }
+                .onFailure { error ->
+                    error.rethrowIfCancellation()
+                    log.error(error) { "widget query handling failed for data=[${query.data}] user=[${query.from.id}]" }
                 }
         }
     }

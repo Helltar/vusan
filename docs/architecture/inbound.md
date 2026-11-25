@@ -17,7 +17,14 @@ turn starts from. Next: [running a turn](turn.md).
    loop, once the runner has accepted the message like any other; so do task-menu callback queries. Every pressed button reaches `CallbackRouter`,
    which rechecks the allowlist and picks the flow: an agent-created inline-choice callback is validated and consumed by
    `InlineChoiceHandler`, and its selected option then enters the agent loop as the user's next turn. Callback data no
-   handler recognizes (a button from an older build) is still answered, so the caller's client stops spinning. A
+   handler recognizes (a button from an older build) is still answered, so the caller's client stops spinning. A press
+   inside one of the bot's widgets (`widget_query`, or `shared_widget_query` from a forwarded copy of a shared one) is
+   read into a `WidgetPress`, launched off the update loop since Telegram times a press out after 15 seconds; a TON
+   wallet's signature or transaction is answered with nothing. The press goes to `callback/WidgetQueryHandler.kt` by what the widget was sent for: a `tally` widget's vote is counted and answered on
+   the spot (`WidgetRegistry.tally`), its counts published at most once a second per widget; an `agent` widget's press
+   is answered empty at once and becomes the presser's turn under the widget (`AgentTurns.dispatchWidgetRequest`,
+   input `<widget_request>`), after the same allowlist check a button gets, one at a time per person and widget, and
+   never from a forwarded copy, which has no chat to answer in. A
    `my_chat_member` update — the bot's own membership changing, which Telegram delivers by default — carries no message
    and goes straight to `telegram/BotMembership.kt` instead of the dispatch below; it is in the default
    `allowed_updates` set, which is why it needs no `allowed_updates` parameter of its own. An `edited_message` update always rewrites its

@@ -6,13 +6,16 @@ import com.helltar.vusan.llm.RequestOptions
 import com.helltar.vusan.llm.TEST_MODEL
 import com.helltar.vusan.outbox.BotOutbox
 import com.helltar.vusan.request.ChatCapabilities
+import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.requestContext
 import com.helltar.vusan.telegram.ChatProfiles
+import com.helltar.vusan.telegram.WidgetRegistry
 import com.helltar.vusan.telegram.tools.chat.ChatPhotoTools
 import com.helltar.vusan.telegram.tools.chat.ChatSettingsTools
 import com.helltar.vusan.telegram.tools.chat.ForumTopicTools
 import com.helltar.vusan.telegram.tools.sticker.StickerCatalog
 import com.helltar.vusan.telegram.tools.sticker.StickerTools
+import com.helltar.vusan.telegram.tools.widget.WidgetTools
 import com.helltar.vusan.tools.PlatformToolSet
 import com.helltar.vusan.tools.ToolGroup
 import com.helltar.vusan.tools.vision.ImageVisionClient
@@ -41,6 +44,8 @@ class TelegramToolSetsTest {
         ) { _, method, _ -> error("the tool sets must not deliver anything to be built: ${method.name}") } as OutputDelivery
 
     private val profiles = ChatProfiles(client, botId = 1)
+
+    private val widgets = WidgetRegistry()
 
     private val catalog = StickerCatalog(client, ImageVisionClient(FakeLlmClient(), TEST_MODEL, RequestOptions()))
 
@@ -71,9 +76,9 @@ class TelegramToolSetsTest {
     // without a vision model nothing described a sticker, so there is no catalog to search.
     @Test
     fun `a deployment without a catalog offers no sticker tools`() {
-        val sets = TelegramToolSets(client, delivery, profiles).of(requestContext(), BotOutbox())
+        val sets = TelegramToolSets(client, delivery, profiles, widgets).of(requestContext(), BotOutbox())
 
-        assertEquals(listOf(ChatFileTools::class), sets.map { it.set::class })
+        assertEquals(listOf(ChatFileTools::class), sets.filterNot { it.set is WidgetTools }.map { it.set::class })
     }
 
     @Test
@@ -106,13 +111,37 @@ class TelegramToolSetsTest {
     // any member sees a group's photo, so reading it needs no admin right, and a private chat has none of its own
     @Test
     fun `a group gets its photo behind a group, a private chat does not`() {
-        val group = TelegramToolSets(client, delivery, profiles).of(requestContext(isPrivate = false), BotOutbox())
-        val private = TelegramToolSets(client, delivery, profiles).of(requestContext(), BotOutbox())
+        val group = TelegramToolSets(client, delivery, profiles, widgets).of(requestContext(isPrivate = false), BotOutbox())
+        val private = TelegramToolSets(client, delivery, profiles, widgets).of(requestContext(), BotOutbox())
 
         assertEquals(ToolGroup.CHAT_PHOTO, group.single { it.set is ChatPhotoTools }.group)
         assertEquals(emptyList(), private.filter { it.set is ChatPhotoTools })
     }
 
+    // building the set touches no database: the registry is only read when a tool runs
+    @Test
+    fun `widgets are offered behind their group`() {
+        val sets = TelegramToolSets(client, delivery, profiles, widgets).of(requestContext(), BotOutbox())
+
+        assertEquals(ToolGroup.WIDGETS, sets.single { it.set is WidgetTools }.group)
+    }
+
+    // a group gets them too: the widget goes to the person's private chat, the only place telegram takes one
+    @Test
+    fun `a channel, or a chat refusing photos, is offered no widgets, a group is`() {
+        val noPhotos = requestContext(capabilities = ChatCapabilities(photos = false))
+        val channel = requestContext().let { it.copy(chat = it.chat.copy(isPrivate = false, type = "channel")) }
+        val group = requestContext(chatId = -100L, isPrivate = false)
+
+        fun offersWidgets(context: RequestContext) =
+            TelegramToolSets(client, delivery, profiles, widgets).of(context, BotOutbox()).any { it.set is WidgetTools }
+
+        assertEquals(listOf(false, false, true), listOf(noPhotos, channel, group).map(::offersWidgets))
+    }
+
+    // widgets have tests of their own, so the lists here leave them out
     private fun toolSetsFor(capabilities: ChatCapabilities): List<PlatformToolSet> =
-        TelegramToolSets(client, delivery, profiles, catalog).of(requestContext(capabilities = capabilities), BotOutbox())
+        TelegramToolSets(client, delivery, profiles, widgets, catalog)
+            .of(requestContext(capabilities = capabilities), BotOutbox())
+            .filterNot { it.set is WidgetTools }
 }

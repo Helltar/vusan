@@ -16,6 +16,8 @@ internal fun ChatCapabilities.allows(output: BotOutput): Boolean = when (output)
     is BotOutput.VideoNote -> videoNotes
     is BotOutput.Quiz, is BotOutput.Poll -> polls
     is BotOutput.Reaction -> reactions
+    // telegram checks a widget like a photo
+    is BotOutput.Widget, is BotOutput.SharedWidget -> photos
     // telegram groups animations, games and stickers under one permission
     is BotOutput.Animation, is BotOutput.Sticker -> stickersAndAnimations
     // a chat banning every kind of media still takes words
@@ -32,6 +34,7 @@ internal fun BotOutput.kindName(): String = when (this) {
     is BotOutput.VideoNote -> "video notes"
     is BotOutput.Quiz, is BotOutput.Poll -> "polls"
     is BotOutput.Reaction -> "reactions"
+    is BotOutput.Widget, is BotOutput.SharedWidget -> "photos"
     is BotOutput.Animation, is BotOutput.Sticker -> "stickers and GIFs"
     is BotOutput.Text, is BotOutput.RichMessage, is BotOutput.InlineChoice -> "text"
 }

@@ -97,6 +97,7 @@ answer to its name. More in [Rights in a group](docs/configuration.md#rights-in-
 - **Its own sandbox** — a private Linux home per person for code, media and data, with snapshots.
 - **One job, many tools** — chains its tools, like putting itself into your video and voicing it.
 - **Web pages** — publishes a page, game or app it built at your own address, kept up longer on request.
+- **Widgets** — puts a live chart, game, calculator or self-counting poll right in your private chat.
 - **Images** — draws from descriptions, edits your pictures, merges several into one, and draws GIFs.
 - **Video clips** — makes short videos with sound, animates your photos, and edits or extends a clip.
 - **Voice replies** — answers out loud with voice messages.

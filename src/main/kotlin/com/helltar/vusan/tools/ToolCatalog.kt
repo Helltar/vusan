@@ -25,7 +25,8 @@ enum class ToolGroup(val summary: String) {
     VIDEOS("make a short video with sound from a description or a picture, with the bot in it if asked, or edit or extend a video"),
     CHAT_PHOTO("get this group's current photo, to show it, look at it, or edit or redraw it"),
     CHAT_SETTINGS("change this group's photo, title or description"),
-    FORUM_TOPICS("open a new forum topic in this group, with a first message if wanted, and rename, close or reopen one");
+    FORUM_TOPICS("open a new forum topic in this group, with a first message if wanted, and rename, close or reopen one"),
+    WIDGETS("put a live card, chart, calculator, game or self-counting poll right in the chat as a small HTML page, and change what it shows later");
 
     val groupName: String = name.lowercase()
 }

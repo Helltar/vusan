@@ -111,6 +111,10 @@ internal fun Throwable.retryAfterOrNull(): Duration? =
         ?.retryAfter
         ?.seconds
 
+/** Telegram's own words for a refusal, for a tool to pass on; `null` when the failure is not one. */
+internal val Throwable.telegramRefusal: String?
+    get() = telegramDescription
+
 private val Throwable.telegramDescription: String?
     get() = telegramRequestError?.apiResponse
 

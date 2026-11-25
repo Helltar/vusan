@@ -109,17 +109,38 @@ internal fun User.toSenderContext(): SenderContext =
 internal val User.isPerson: Boolean
     get() = id !in SHARED_SENDER_IDS
 
+/**
+ * The chat a press inside a widget came from, which arrives with no message: [threadId] is the topic the
+ * widget was posted in, as recorded when it was sent.
+ */
+internal fun Chat.toChatContext(profile: ChatProfile, threadId: Int?): ChatContext =
+    ChatContext(
+        id = id.toString(),
+        isPrivate = isUserChat,
+        type = promptChatType(),
+        threadId = threadId?.toString(),
+        title = titleOrDisplayName(),
+        username = userName,
+        description = profile.description,
+        capabilities = profile.capabilities,
+    )
+
 // the bot api models chat kinds as flags on `Chat` and `Message`, so the label is assembled from them.
 internal fun Message.promptChatType(): String =
     when {
         businessConnectionId != null -> "business"
-        chat.isUserChat && chat.isForum == true -> "private_forum"
-        chat.isUserChat -> "private"
-        directMessagesTopic != null -> "channel_direct_messages"
-        chat.isSuperGroupChat && chat.isForum == true -> "supergroup_forum"
-        chat.isSuperGroupChat -> "supergroup"
-        chat.isGroupChat -> "group"
-        chat.isChannelChat -> "channel"
+        !chat.isUserChat && directMessagesTopic != null -> "channel_direct_messages"
+        else -> chat.promptChatType()
+    }
+
+private fun Chat.promptChatType(): String =
+    when {
+        isUserChat && isForum == true -> "private_forum"
+        isUserChat -> "private"
+        isSuperGroupChat && isForum == true -> "supergroup_forum"
+        isSuperGroupChat -> "supergroup"
+        isGroupChat -> "group"
+        isChannelChat -> "channel"
         else -> "unknown"
     }
 

@@ -20,6 +20,7 @@ import com.helltar.vusan.outbox.OutboxItem
 import com.helltar.vusan.request.RequestContext
 import com.helltar.vusan.request.UserRef
 import com.helltar.vusan.telegram.PollRegistry
+import com.helltar.vusan.telegram.WidgetRegistry
 import com.helltar.vusan.telegram.api
 import com.helltar.vusan.telegram.telegramChatId
 import com.helltar.vusan.telegram.telegramThreadId
@@ -69,7 +70,9 @@ internal fun botActionFor(output: BotOutput): ActionType? = when (output) {
     is BotOutput.InlineChoice,
     is BotOutput.RichMessage,
     is BotOutput.Quiz,
-    is BotOutput.Poll -> ActionType.TYPING
+    is BotOutput.Poll,
+    is BotOutput.Widget,
+    is BotOutput.SharedWidget -> ActionType.TYPING
     // a reaction is instant, and a sticker is resent by file_id.
     is BotOutput.Reaction, is BotOutput.Sticker -> null
 }
@@ -82,6 +85,8 @@ private fun BotOutput.groupLogText(): String? = when (this) {
     is BotOutput.InlineChoice -> question
     is BotOutput.Quiz -> question
     is BotOutput.Poll -> question
+    is BotOutput.Widget -> caption
+    is BotOutput.SharedWidget -> caption
     else -> null
 }
 
@@ -97,6 +102,7 @@ private fun BotOutput.groupLogDescriptor(): String? = when (this) {
     is BotOutput.Video -> "video"
     is BotOutput.Audio -> "audio"
     is BotOutput.AudioGroup -> "tracks"
+    is BotOutput.Widget, is BotOutput.SharedWidget -> "widget"
     // a reaction is not a message, so it leaves no row.
     else -> null
 }
@@ -142,6 +148,7 @@ class TelegramDelivery(
     private val groupLog: GroupLogRepository? = null,
     private val polls: PollRegistry? = null,
     private val onStickerSent: ((chatId: Long, catalogId: Long) -> Unit)? = null,
+    private val widgets: WidgetRegistry? = null,
 ) : OutputDelivery {
 
     private data class DeliveryTarget(val chat: ChatTarget, val replyToMessageId: Long? = null) {
@@ -269,6 +276,35 @@ class TelegramDelivery(
             senderPrivateChatId = userId,
             messages = messages,
         )
+    }
+
+    /**
+     * The answer to a press inside a widget, which comes with no message of its own: it hangs under the
+     * widget, and [userId] is who pressed.
+     */
+    suspend fun sendWidgetAnswer(
+        result: AgentResult,
+        target: ChatTarget,
+        widgetMessageId: Int,
+        userId: Long,
+        messages: Messages,
+    ) {
+        val originTarget = DeliveryTarget(target, replyToMessageId = widgetMessageId.toLong())
+
+        dispatch(
+            result = result,
+            originTarget = originTarget,
+            currentChatTarget = originTarget.withoutReply(),
+            senderPrivateChatId = userId,
+            messages = messages,
+        )
+    }
+
+    /** A canned line under a widget, for a turn a press started that failed or was stopped. */
+    suspend fun sendWidgetNotice(target: ChatTarget, widgetMessageId: Int, text: String) {
+        withFloodWaitRetry(target.chatId) {
+            TelegramOutputSender.sendText(client, target, text, replyParameters(widgetMessageId.toLong()))
+        }
     }
 
     /**
@@ -645,8 +681,19 @@ class TelegramDelivery(
                         pollRegistry?.let { registry ->
                             { pollId -> registry.remember(pollId, target.chatId, item) }
                         },
+                    onWidgetSent = widgets?.let { registry -> { sent -> rememberWidget(registry, target.chat, sent, item) } },
                 )
         }
+    }
+
+    // a press is matched against this row; without it the widget still shows, its presses answered with
+    // nothing, so a failure here must not fail a send telegram already made.
+    private suspend fun rememberWidget(registry: WidgetRegistry, target: ChatTarget, sent: SentWidget, item: BotOutput) {
+        runCatching { registry.remember(target, sent, item) }
+            .onFailure {
+                it.rethrowIfCancellation()
+                log.warn(it) { "failed to remember widget msg=[${sent.messageId}] in chat=[${target.chatId}]; presses in it go unanswered" }
+            }
     }
 
     private fun isPrivateChatBlocked(error: Throwable): Boolean =

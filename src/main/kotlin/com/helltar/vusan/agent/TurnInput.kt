@@ -212,6 +212,28 @@ internal fun inlineChoiceInput(question: String, option: String): String =
         },
     )
 
+/**
+ * A press inside one of the bot's widgets that asks for a turn: which widget (its message and caption), the
+ * data its code sent, and the state it shows now. The answer is a new state; words in the chat are optional.
+ */
+internal fun widgetRequestInput(
+    messageId: String,
+    caption: String,
+    data: String,
+    chatData: String?,
+    publicData: String?,
+): String =
+    xmlBlock(
+        "widget_request",
+        buildString {
+            appendLine("A tap in your widget, message $messageId, sent it this data. Answer by calling `setWidgetState` with `messageId` $messageId and the `chatData` or `publicData` the widget should show next, in the format its code reads; the person sees the widget change. Write in the chat only if a line there adds something, and otherwise end with `staySilent`.")
+            appendLine(xmlBlock("widget_caption", caption.neutralizePromptBlocks()))
+            appendLine(xmlBlock("widget_data", data.neutralizePromptBlocks()))
+            chatData?.let { appendLine(xmlBlock("widget_chat_data", it.neutralizePromptBlocks())) }
+            publicData?.let { appendLine(xmlBlock("widget_public_data", it.neutralizePromptBlocks())) }
+        }.trimEnd(),
+    )
+
 // for a message with no words: media alone, a bare mention. it names tools, so it is prompt text and lives
 // here, not in an adapter
     internal const val MENTION_ONLY_PROMPT = "User mentioned the bot with no text. Respond naturally and briefly."

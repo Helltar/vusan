@@ -182,7 +182,7 @@ class AgentRunner(
 
         val toolBudget = TurnToolBudget(agentFactory.liveToolResultMaxTokens)
         val shelf = TurnShelf(context.attachedFiles)
-        val toolCatalog = toolCatalogFactory.buildCatalog(context, outbox, toolBudget, shelf, narrator)
+        val toolCatalog = toolCatalogFactory.buildCatalog(context, outbox, toolBudget, shelf, narrator, request.toolGroups)
 
         val currentTurn =
             currentTurnPrompt(

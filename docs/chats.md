@@ -139,6 +139,22 @@ admin or a channel gets a refusal, since nobody's rights stand behind the reques
 to the request stays where it was asked. It never deletes a topic, as that takes every message in it
 along.
 
+## Widgets
+
+Vusan can send a widget in a private chat: a small page drawn and run inside the message, such as a chart,
+a game or a poll. Telegram does not take a bot's widget in a group yet, so one asked for in a group goes to
+the asker's DMs, and a widget cannot be forwarded. Apps that do not draw widgets show only its caption.
+What a press inside it does was chosen when it was sent:
+
+- **Nothing reaches Vusan** — a calculator, a chart or a game played alone keeps everything in the widget.
+- **A poll that counts itself** — each person holds one choice, a new press replaces it and the same press
+  takes it back. Anyone who sees the widget can vote, people Vusan does not answer included, since counting
+  needs no model; a poll posted again counts into the same tally.
+- **Played against Vusan** — a press is that person's next turn, answered by changing what the widget
+  shows; only people Vusan answers, and one press at a time per person.
+
+Vusan remembers its widgets for 90 days; after that a press in one is answered with nothing.
+
 ## Leaving someone alone
 
 Anyone can tell Vusan not to write to them — «leave me alone», «stop writing to me» — and it keeps to
