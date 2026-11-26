@@ -7,18 +7,22 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import javax.imageio.IIOImage
 import javax.imageio.ImageIO
+import javax.imageio.ImageReader
 import javax.imageio.ImageWriteParam
+import javax.imageio.metadata.IIOMetadataNode
 
 private const val JPEG_QUALITY = 0.92f
 
 // a few kilobytes of png can declare a canvas no photo has, and decoding walks every declared pixel even when
-// only some are kept, so the size is read from the header first. the jdk's jpeg and png readers decode a row at
-// a time and keep only the rows a subsampled read asks for, so for them the cap is past any camera's photo; any
-// other reader may build the whole raster first (webp's lossless one does), so it gets what a full 4-byte raster
-// can take beside the rest of the heap.
+// only some are kept, so the size is read from the header first. the jdk's png reader and its jpeg reader on a
+// single-scan jpeg decode a row at a time and keep only the rows a subsampled read asks for, so for them the cap
+// is past any camera's photo. any other reader may build the whole image first: webp's lossless one a raster, and
+// libjpeg for a progressive or multi-scan jpeg the coefficients of every pixel, off the heap. those get what a
+// full 4-byte raster can take beside the rest of the heap.
 private const val DECODE_MAX_PIXELS_STREAMED = 64_000_000L
 private const val DECODE_MAX_PIXELS = 16_000_000L
-private val STREAMED_FORMATS = setOf("jpeg", "png")
+private const val JPEG_NATIVE_METADATA = "javax_imageio_jpeg_image_1.0"
+private const val JPEG_PROGRESSIVE_PROCESS = "2"
 
 // telegram shows a photo at most this large on its long side, and scales a larger one down itself
 private const val REENCODE_MAX_LONG_SIDE = 2560
@@ -126,8 +130,7 @@ private fun decodedWithin(bytes: ByteArray, maxLongSide: Int): BufferedImage? =
                 val width = reader.getWidth(0)
                 val height = reader.getHeight(0)
 
-                val streamed = reader.formatName.lowercase() in STREAMED_FORMATS
-                val maxPixels = if (streamed) DECODE_MAX_PIXELS_STREAMED else DECODE_MAX_PIXELS
+                val maxPixels = if (reader.decodesRowByRow()) DECODE_MAX_PIXELS_STREAMED else DECODE_MAX_PIXELS
 
                 if (width <= 0 || height <= 0 || width.toLong() * height > maxPixels) return@use null
 
@@ -140,6 +143,24 @@ private fun decodedWithin(bytes: ByteArray, maxLongSide: Int): BufferedImage? =
             }
         }
     }.getOrNull()
+
+private fun ImageReader.decodesRowByRow(): Boolean =
+    when (formatName.lowercase()) {
+        "png" -> true
+        "jpeg" -> isSingleScanJpeg()
+        else -> false
+    }
+
+// the metadata is read from the markers up to the first scan, so no pixel is decoded to answer this
+private fun ImageReader.isSingleScanJpeg(): Boolean {
+    val tree = getImageMetadata(0)?.getAsTree(JPEG_NATIVE_METADATA) as? IIOMetadataNode ?: return false
+    val frame = tree.getElementsByTagName("sof").item(0) as? IIOMetadataNode ?: return false
+    val firstScan = tree.getElementsByTagName("sos").item(0) as? IIOMetadataNode ?: return false
+    val components = frame.getElementsByTagName("componentSpec").length
+
+    return frame.getAttribute("process") != JPEG_PROGRESSIVE_PROCESS &&
+        firstScan.getElementsByTagName("scanComponentSpec").length == components
+}
 
 private fun jpegOf(image: BufferedImage): ByteArray? {
     val writer = ImageIO.getImageWritersByFormatName("jpeg").asSequence().firstOrNull() ?: return null

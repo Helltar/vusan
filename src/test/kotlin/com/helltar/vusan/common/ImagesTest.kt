@@ -6,7 +6,9 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.util.Base64
+import javax.imageio.IIOImage
 import javax.imageio.ImageIO
+import javax.imageio.ImageWriteParam
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -91,10 +93,59 @@ class ImagesTest {
         assertNull(pictureHash(webp))
     }
 
+    // libjpeg keeps a progressive jpeg's coefficients for every pixel until its last scan, so the header alone may
+    // ask for hundreds of megabytes off the heap
+    @Test
+    fun `a progressive jpeg past what a whole image may take is measured but not decoded`() {
+        val progressive = jpegDeclaring(5_000, 5_000, progressive = true)
+
+        assertEquals(5_000 to 5_000, imageDimensions(progressive))
+        assertNull(reencodedAsJpeg(progressive))
+        assertNull(pictureHash(progressive))
+    }
+
+    @Test
+    fun `a baseline jpeg of the same canvas is still decoded a row at a time`() {
+        assertNotNull(pictureHash(jpegDeclaring(5_000, 5_000, progressive = false)))
+    }
+
+    @Test
+    fun `a small progressive jpeg is decoded`() {
+        val progressive = jpegDeclaring(64, 48, progressive = true)
+
+        assertEquals(64 to 48, imageDimensions(assertNotNull(reencodedAsJpeg(progressive))))
+    }
+
     @Test
     fun `this runtime reads and writes jpeg and reads webp`() {
         assertEquals(mapOf("jpeg" to true, "webp" to true), workingImageCodecs())
     }
+
+    // a 64x48 jpeg whose frame header is rewritten to declare the given canvas, so the reader sees that size while
+    // the test never builds it
+    private fun jpegDeclaring(width: Int, height: Int, progressive: Boolean): ByteArray {
+        val writer = ImageIO.getImageWritersByFormatName("jpeg").next()
+        val output = ByteArrayOutputStream()
+
+        ImageIO.createImageOutputStream(output).use { stream ->
+            writer.output = stream
+            val param = writer.defaultWriteParam.apply { if (progressive) progressiveMode = ImageWriteParam.MODE_DEFAULT }
+            writer.write(null, IIOImage(testPictureImage(), null, null), param)
+        }
+
+        writer.dispose()
+
+        val bytes = output.toByteArray()
+        val frameMarker = if (progressive) 0xC2 else 0xC0
+        val frame = (0 until bytes.size - 1).first { bytes[it] == 0xFF.toByte() && bytes[it + 1] == frameMarker.toByte() }
+
+        // after the marker: length (2 bytes), precision (1), then height and width (2 each)
+        ByteBuffer.wrap(bytes).putShort(frame + 5, height.toShort()).putShort(frame + 7, width.toShort())
+
+        return bytes
+    }
+
+    private fun testPictureImage(): BufferedImage = ImageIO.read(ByteArrayInputStream(testPicture(64, 48, scene = 1)))
 
     private companion object {
         // 64x48, lossy vp8, made with imagemagick
