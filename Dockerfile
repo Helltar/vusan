@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-alpine@sha256:82801f9dcdcbad5a05082aba8c86d1da5b72ccb498e71318b1f91b5a477887b3 AS build
+FROM eclipse-temurin:25-jdk-alpine@sha256:22edbb1021420ae6e248519d1af07577742314d67d4c60fcbb2e285b7e47fa78 AS build
 WORKDIR /app
 
 COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
@@ -21,10 +21,10 @@ WORKDIR /app
 # runtime yt-dlp enables by default, so dropping the package silently degrades every youtube tool.
 # its version is whatever alpine ships and is deliberately not held to the sandbox service's pin:
 # yt-dlp needs a JS runtime, not a particular one, and alpine offers no version to pin to anyway.
-# openjdk21-jre rather than its -headless half: alpine ships the jpeg codec (libjavajpeg) and the color
+# openjdk25-jre rather than its -headless half: alpine ships the jpeg codec (libjavajpeg) and the color
 # management (liblcms) only there, and without them imageio reads and writes no jpeg at all, failing quietly
 # wherever a picture is measured, compared or re-encoded. awt still runs headless, see the entrypoint.
-RUN apk add --no-cache deno ffmpeg openjdk21-jre python3 && \
+RUN apk add --no-cache deno ffmpeg openjdk25-jre python3 && \
     apk add --no-cache --virtual .pip py3-pip && \
     pip install --pre --no-cache-dir --break-system-packages "yt-dlp[default]" && \
     apk del .pip

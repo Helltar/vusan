@@ -52,23 +52,34 @@ application {
     mainClass.set("com.helltar.vusan.MainKt")
 }
 
+// sqlite-jdbc loads its native library through System.load, which the jvm warns about on every start and
+// is to refuse in a future release unless native access is granted. a `java -jar` run takes the grant from
+// the manifest below, every other jvm gradle starts from this flag.
+val enableNativeAccess = "--enable-native-access=ALL-UNNAMED"
+
 // the running bot reports its own version from here, so a deployed container can be identified from
 // its first log line. a classpath run has no manifest and says `dev` instead.
 tasks.jar {
     manifest {
         attributes(
             "Implementation-Title" to project.name,
-            "Implementation-Version" to project.version
+            "Implementation-Version" to project.version,
+            "Enable-Native-Access" to "ALL-UNNAMED",
         )
     }
 }
 
+tasks.withType<JavaExec>().configureEach {
+    jvmArgs(enableNativeAccess)
+}
+
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 
 tasks.test {
     useJUnitPlatform()
+    jvmArgs(enableNativeAccess)
 
     // only what needs attention: a passing run prints its one summary line, a failure its whole trace
     testLogging {

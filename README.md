@@ -150,7 +150,7 @@ Then build and start the image:
 docker compose up --build -d
 ```
 
-Or run it on JDK 21, with `ffmpeg` and `yt-dlp` on `PATH`:
+Or run it on JDK 25, with `ffmpeg` and `yt-dlp` on `PATH`:
 
 ```bash
 ./gradlew run

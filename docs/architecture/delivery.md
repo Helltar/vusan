@@ -87,7 +87,7 @@ Before it: [running a turn](turn.md).
       sends the same pixels once more as a plain RGB JPEG (`common/Images.kt`, `reencodedAsJpeg`), no longer on its
       long side than the 2560 pixels Telegram shows a photo at. Only when that is refused as well, or the image
       cannot be decoded at all, does the photo go out as a document, carrying the original file; the log line
-      then names its format and size. The JPEG codec is native and comes with Alpine's full `openjdk21-jre` alone,
+      then names its format and size. The JPEG codec is native and comes with Alpine's full `openjdk25-jre` alone,
       so the startup summary's `Image codecs:` line warns when a runtime lacks it.
     - **Widgets** — Bot API 10.4's HTML widgets (`BotOutput.Widget`, and `BotOutput.SharedWidget` posting a shared one
       again) go out through `telegram/delivery/TelegramWidgetRequests.kt`. A widget telegram actually created is
